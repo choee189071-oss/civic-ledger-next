@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import { readings } from '../../../../lib/mock-data';
 
-export async function GET(
-  _: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const item = readings[id];
-  if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(item);
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function GET(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const reading = readings[id];
+
+  if (!reading) {
+    return NextResponse.json(
+      { error: 'Reading not found' },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json(reading);
 }

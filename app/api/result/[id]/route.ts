@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import { results } from '../../../../lib/mock-data';
 
-export async function GET(
-  _: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const item = results.find((r) => r.id === id);
-  if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(item);
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function GET(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const result = results.find((item) => item.id === id);
+
+  if (!result) {
+    return NextResponse.json(
+      { error: 'Result not found' },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json(result);
 }
