@@ -27,7 +27,6 @@ type Props = {
 };
 
 export function SearchPanel(props: Props) {
-  const top = props.items[0];
   const citations = [
     ...new Set(
       props.items.flatMap((item) =>
@@ -37,46 +36,68 @@ export function SearchPanel(props: Props) {
   ];
 
   return (
-    <div className="card">
-      <h3>Search</h3>
-      <div className="searchbox" style={{ margin: '16px 0' }}>
+    <section className="workspace-panel query-panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Ask</p>
+          <h2>Research intake</h2>
+        </div>
+        <span className="count">{props.items.length}</span>
+      </div>
+
+      <div className="searchbox">
         <input
           value={props.query}
           onChange={(e) => props.onQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
-          placeholder="Ask about California public finance…"
+          placeholder="Issuer, bond, budget, filing, source..."
         />
-        <button className="button-primary" onClick={props.onSearch}>Search</button>
+        <button className="icon-button primary" onClick={props.onSearch} aria-label="Run research search">⌕</button>
       </div>
+
       <div className="filters">
-        <select value={props.topic} onChange={(e) => props.onTopic(e.target.value)}>
+        <label>
+          Topic
+          <select value={props.topic} onChange={(e) => props.onTopic(e.target.value)}>
           <option value="all">All topics</option>
           <option value="Budget">Budget</option>
           <option value="Expenditures">Expenditures</option>
           <option value="Disclosure">Disclosure</option>
           <option value="Bonds">Bonds</option>
-        </select>
-        <select value={props.source} onChange={(e) => props.onSource(e.target.value)}>
+          </select>
+        </label>
+        <label>
+          Source
+          <select value={props.source} onChange={(e) => props.onSource(e.target.value)}>
           <option value="all">All sources</option>
           <option value="Open FI$Cal">Open FI$Cal</option>
           <option value="California Budget">California Budget</option>
           <option value="CDIAC">CDIAC</option>
           <option value="Debt Line">Debt Line</option>
-        </select>
-        <select value={props.sort} onChange={(e) => props.onSort(e.target.value)}>
+          </select>
+        </label>
+        <label>
+          Sort
+          <select value={props.sort} onChange={(e) => props.onSort(e.target.value)}>
           <option value="score">Sort by relevance</option>
           <option value="freshness">Sort by freshness</option>
           <option value="title">Sort by title</option>
-        </select>
+          </select>
+        </label>
       </div>
-      <div className="toolbar" style={{ margin: '16px 0' }}>
-        {['results', 'summary', 'citations'].map((t) => (
+
+      <div className="segmented-control">
+        {[
+          ['results', 'Results'],
+          ['summary', 'Brief'],
+          ['citations', 'Citations']
+        ].map(([id, label]) => (
           <button
-            key={t}
-            className={`tab ${props.tab === t ? 'active' : ''}`}
-            onClick={() => props.onTab(t)}
+            key={id}
+            className={props.tab === id ? 'active' : ''}
+            onClick={() => props.onTab(id)}
           >
-            {t}
+            {label}
           </button>
         ))}
       </div>
@@ -92,13 +113,13 @@ export function SearchPanel(props: Props) {
               className={`result ${props.selectedId === item.id ? 'active' : ''}`}
               onClick={() => props.onSelect(item.id)}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <div className="result-topline">
                 <div>
                   <div className="meta">
                     <span>{item.topic}</span>
                     <span>{item.source}</span>
                   </div>
-                  <h4 style={{ margin: '8px 0' }}>{item.title}</h4>
+                  <h3>{item.title}</h3>
                 </div>
                 <span className="badge">{item.score}</span>
               </div>
@@ -108,10 +129,14 @@ export function SearchPanel(props: Props) {
         </div>
       )}
 
-      {props.tab === 'summary' && top && (
+      {props.tab === 'summary' && props.items[0] && (
         <div className="stack">
-          <p className="muted"><strong>Top match:</strong> {top.title} · {top.source}</p>
-          {top.facts.map((f) => <div key={f} className="muted">{f}</div>)}
+          <div className="brief-box">
+            <span className="status-pill ready">Top match</span>
+            <h3>{props.items[0].title}</h3>
+            <p className="muted">{props.items[0].summary}</p>
+          </div>
+          {props.items[0].facts.map((f) => <div key={f} className="fact-line">{f}</div>)}
         </div>
       )}
 
@@ -122,6 +147,6 @@ export function SearchPanel(props: Props) {
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -6,6 +6,7 @@ import { SearchPanel } from './components/SearchPanel';
 import { DetailPanel } from './components/DetailPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
+import { EvidencePanel } from './components/EvidencePanel';
 
 export default function HomePage() {
   const [view, setView] = useState('search');
@@ -19,6 +20,7 @@ export default function HomePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [reading, setReading] = useState<any | null>(null);
+  const [savedRecords, setSavedRecords] = useState<any[]>([]);
 
   async function loadSearch(
     nextQuery = query,
@@ -64,28 +66,51 @@ export default function HomePage() {
     setView('reading');
   }
 
+  function saveRecord() {
+    if (!detail) return;
+
+    setSavedRecords((records) => {
+      const nextRecord = {
+        ...detail,
+        savedAt: new Date().toISOString()
+      };
+      const next = [
+        nextRecord,
+        ...records.filter((record) => record.id !== detail.id)
+      ].slice(0, 8);
+
+      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      return next;
+    });
+  }
+
   useEffect(() => {
+    const stored = window.localStorage.getItem('civic-ledger-saved-records');
+    if (stored) {
+      setSavedRecords(JSON.parse(stored));
+    }
     loadSources();
     loadSearch();
   }, []);
 
   return (
     <div className="app-shell">
-      <Sidebar current={view} onChange={setView} />
+      <Sidebar current={view} onChange={setView} savedRecords={savedRecords} />
       <main className="main">
-        <section className="hero">
-          <div className="card">
-            <h1>California public finance workbench.</h1>
-            <p className="muted">Search, read, and cite Open FI$Cal, California Budget, CDIAC, and Debt Line from one place.</p>
+        <header className="workspace-header">
+          <div>
+            <p className="eyebrow">Research Workspace</p>
+            <h1>California public finance desk</h1>
           </div>
-          <div className="panel">
-            <strong>Mock API active</strong>
-            <p className="muted" style={{ marginTop: 12 }}>Route handlers simulate /api/search, /api/sources, /api/result/:id, and /api/reading/:id.</p>
+          <div className="status-strip">
+            <span className="status-pill ready">Build ready</span>
+            <span className="status-pill">Mock data</span>
+            <span className="status-pill">{savedRecords.length} saved</span>
           </div>
-        </section>
+        </header>
 
         {view === 'search' && (
-          <section className="search-layout">
+          <section className="workspace-grid">
             <SearchPanel
               query={query}
               topic={topic}
@@ -105,19 +130,16 @@ export default function HomePage() {
             <DetailPanel
               detail={detail}
               onOpenReading={() => selectedId && loadReading(selectedId)}
+              onSave={saveRecord}
+              isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
             />
+            <EvidencePanel detail={detail} sources={sources} />
           </section>
         )}
 
         {view === 'reading' && <ReadingPanel item={reading} />}
         {view === 'sources' && <SourcesPanel items={sources} />}
       </main>
-      <aside className="rail">
-        <div className="panel">
-          <strong>Live sources</strong>
-          <p className="muted" style={{ marginTop: 12 }}>Open FI$Cal for expenditure lookup, California Budget for fiscal-year framing, CDIAC for debt reporting and data workflows.</p>
-        </div>
-      </aside>
     </div>
   );
 }

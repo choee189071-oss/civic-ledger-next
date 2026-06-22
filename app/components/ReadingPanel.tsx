@@ -4,15 +4,21 @@ type Props = {
 
 export function ReadingPanel({ item }: Props) {
   return (
-    <div className="card">
-      <h3>{item?.title || 'Reading'}</h3>
-      <div className="stack" style={{ marginTop: 16 }}>
+    <section className="full-page-panel reading-desk">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Reading</p>
+          <h2>{item?.title || 'Reading room'}</h2>
+        </div>
+        <span className="status-pill">Draft</span>
+      </div>
+      <div className="reading-body">
         {(item?.body || ['Select a result and open reading mode.']).map(
           (paragraph: string) => (
-            <p key={paragraph} className="muted">{paragraph}</p>
+            <p key={paragraph}>{paragraph}</p>
           )
         )}
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,23 +1,26 @@
 type Props = {
   current: string;
   onChange: (view: string) => void;
+  savedRecords: any[];
 };
 
-export function Sidebar({ current, onChange }: Props) {
+export function Sidebar({ current, onChange, savedRecords }: Props) {
   const views = [
-    { id: 'search', label: 'Search' },
-    { id: 'reading', label: 'Reading' },
-    { id: 'sources', label: 'Sources' }
+    { id: 'search', label: 'Research desk', icon: '⌕' },
+    { id: 'reading', label: 'Reading room', icon: '□' },
+    { id: 'sources', label: 'Source registry', icon: '◇' }
   ];
+
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="logo">↗</div>
+        <div className="logo">CL</div>
         <div>
           <strong>Civic Ledger</strong>
-          <div className="muted" style={{ fontSize: 13 }}>Public finance workspace</div>
+          <div className="muted small">Public finance workspace</div>
         </div>
       </div>
+
       <nav className="nav">
         {views.map((v) => (
           <button
@@ -25,16 +28,32 @@ export function Sidebar({ current, onChange }: Props) {
             className={current === v.id ? 'active' : ''}
             onClick={() => onChange(v.id)}
           >
+            <span>{v.icon}</span>
             {v.label}
           </button>
         ))}
       </nav>
-      <div className="panel" style={{ marginTop: 24 }}>
-        <strong>Mock API mode</strong>
-        <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-          Route handlers simulate real endpoints. Swap lib/mock-data.ts for real data when ready.
-        </p>
-      </div>
+
+      <section className="sidebar-section">
+        <div className="section-heading">
+          <span>Saved records</span>
+          <span className="count">{savedRecords.length}</span>
+        </div>
+        <div className="saved-list">
+          {savedRecords.length === 0 && (
+            <p className="muted small">No records saved yet.</p>
+          )}
+          {savedRecords.map((record) => (
+            <div key={record.id} className="saved-item">
+              <span className="saved-dot" />
+              <div>
+                <strong>{record.title}</strong>
+                <p className="muted small">{record.source} · {record.topic}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </aside>
   );
 }

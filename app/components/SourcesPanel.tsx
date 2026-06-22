@@ -4,21 +4,32 @@ type Props = {
 
 export function SourcesPanel({ items }: Props) {
   return (
-    <div className="card">
-      <h3>Sources</h3>
-      <div className="stack" style={{ marginTop: 16 }}>
+    <section className="full-page-panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Registry</p>
+          <h2>Source registry</h2>
+        </div>
+        <span className="count">{items.length}</span>
+      </div>
+      <div className="source-grid">
         {items.map((item) => (
-          <div key={item.id} className="panel">
+          <article key={item.id} className="source-card">
             <div className="meta">
               <span>{item.topic}</span>
               <span>{item.trust}</span>
               <span>{item.freshness}</span>
             </div>
-            <h4 style={{ margin: '8px 0' }}>{item.name}</h4>
+            <h3>{item.name}</h3>
             <p className="muted">{item.description}</p>
-          </div>
+            <div className="stack">
+              {item.keyFacts?.map((fact: string) => (
+                <div key={fact} className="fact-line">{fact}</div>
+              ))}
+            </div>
+          </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
