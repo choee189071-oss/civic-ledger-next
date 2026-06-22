@@ -87,17 +87,17 @@ export const results: Result[] = [
     id: 'r1',
     title: 'Department expenditure lookup workflow',
     topic: 'Expenditures',
-    source: 'Open FI\$Cal',
+    source: 'Open FI$Cal',
     score: 97,
     freshnessRank: 3,
-    summary: 'Start with Open FI\$Cal when the user asks which departments spent money, how much was spent, or what records can be downloaded.',
+    summary: 'Start with Open FI$Cal when the user asks which departments spent money, how much was spent, or what records can be downloaded.',
     snippet: 'The source is strongest when the question is about monitoring state spending, downloading data, or navigating department expenditure records.',
     facts: [
       'Best first stop for state expenditure lookup.',
       'Supports raw data download and exploration.',
       'Pairs with budget sources for narrative context.'
     ],
-    citations: ['Open FI\$Cal', 'Download Expenditures']
+    citations: ['Open FI$Cal', 'Download Expenditures']
   },
   {
     id: 'r2',
@@ -138,7 +138,7 @@ export const results: Result[] = [
     source: 'Debt Line',
     score: 86,
     freshnessRank: 5,
-    summary: 'Use Debt Line when the user wants a more newsletter-like monitoring workflow around proposed and sold debt issues in California.',
+    summary: 'Use Debt Line when the user wants a newsletter-like monitoring workflow around proposed and sold debt issues in California.',
     snippet: 'It works well as a monitoring layer and as a bridge from filings to bond-oriented reading and calendar tracking.',
     facts: [
       'Good for recurring debt-monitoring questions.',
@@ -156,7 +156,7 @@ export const readings: Record<string, Reading> = {
     body: [
       'When a user starts with a budget question, they often need to verify whether the narrative shows up in department-level spending records.',
       'The workbench should push them from a summary into a spending view with a source trail and a clear way to inspect records.',
-      'This is where Open FI\$Cal works as the operational evidence layer.'
+      'This is where Open FI$Cal works as the operational evidence layer.'
     ]
   },
   r2: {
