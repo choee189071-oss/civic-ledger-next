@@ -8,6 +8,25 @@ import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
 import { EvidencePanel } from './components/EvidencePanel';
 
+function normalizeRecord(item: any) {
+  return {
+    ...item,
+    score: item.score ?? 82,
+    summary: item.summary ?? item.snippet ?? item.title,
+    snippet: item.snippet ?? item.summary ?? '',
+    facts: item.facts ?? [
+      item.program && `Program: ${item.program}`,
+      item.fund && `Fund: ${item.fund}`,
+      item.accountCategory && `Account category: ${item.accountCategory}`,
+      typeof item.amount === 'number' && `Amount: $${item.amount.toLocaleString()}`,
+      item.fiscalYear && `Fiscal year: ${item.fiscalYear}`,
+    ].filter(Boolean),
+    citations: item.citations ?? [
+      item.source === 'Open FI$Cal' ? 'https://open.fiscal.ca.gov' : item.source,
+    ].filter(Boolean),
+  };
+}
+
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [query, setQuery] = useState('budget expenditures');
@@ -21,6 +40,8 @@ export default function HomePage() {
   const [detail, setDetail] = useState<any | null>(null);
   const [reading, setReading] = useState<any | null>(null);
   const [savedRecords, setSavedRecords] = useState<any[]>([]);
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
 
   async function loadSearch(
     nextQuery = query,
@@ -36,11 +57,12 @@ export default function HomePage() {
     });
     const res = await fetch(`/api/search?${params.toString()}`);
     const payload = await res.json();
-    setResults(payload.items);
-    const first = payload.items[0];
+    const items = (payload.items ?? []).map(normalizeRecord);
+    setResults(items);
+    const first = items[0];
     if (first) {
       setSelectedId(first.id);
-      await loadDetail(first.id);
+      setDetail(first);
     } else {
       setSelectedId(null);
       setDetail(null);
@@ -54,9 +76,16 @@ export default function HomePage() {
   }
 
   async function loadDetail(id: string) {
+    const existing = results.find((item) => item.id === id);
+    if (existing) {
+      setDetail(normalizeRecord(existing));
+      return;
+    }
+
     const res = await fetch(`/api/result/${id}`);
+    if (!res.ok) return;
     const payload = await res.json();
-    setDetail(payload);
+    setDetail(normalizeRecord(payload));
   }
 
   async function loadReading(id: string) {
@@ -64,6 +93,70 @@ export default function HomePage() {
     const payload = await res.json();
     setReading(payload);
     setView('reading');
+  }
+
+  async function runResearch() {
+    setIsResearching(true);
+    setResearchError(null);
+
+    try {
+      const [researchRes, searchRes] = await Promise.all([
+        fetch('/api/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, topic, source }),
+        }),
+        fetch(`/api/search?${new URLSearchParams({ q: query, topic, source, sort }).toString()}`),
+      ]);
+
+      const searchPayload = await searchRes.json().catch(() => ({ items: [] }));
+      const searchItems = (searchPayload.items ?? []).map(normalizeRecord);
+
+      if (!researchRes.ok) {
+        const errorPayload = await researchRes.json().catch(() => ({}));
+        throw new Error(errorPayload.error || 'Live research failed.');
+      }
+
+      const researchPayload = await researchRes.json();
+      const researchRecord = normalizeRecord(researchPayload.record);
+      const nextResults = [
+        researchRecord,
+        ...searchItems.filter((item: any) => item.id !== researchRecord.id),
+      ].slice(0, 12);
+
+      setResults(nextResults);
+      setSelectedId(researchRecord.id);
+      setDetail(researchRecord);
+      setTab('results');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Live research failed.';
+      setResearchError(message);
+      await loadSearch();
+    } finally {
+      setIsResearching(false);
+    }
+  }
+
+  function openCurrentReading() {
+    if (!detail) return;
+
+    if (detail.kind === 'research') {
+      setReading({
+        id: detail.id,
+        title: `Reading: ${detail.title}`,
+        body: [
+          detail.summary,
+          detail.snippet,
+          ...(detail.facts ?? []),
+        ].filter(Boolean),
+      });
+      setView('reading');
+      return;
+    }
+
+    if (selectedId) {
+      loadReading(selectedId);
+    }
   }
 
   function saveRecord() {
@@ -104,7 +197,7 @@ export default function HomePage() {
           </div>
           <div className="status-strip">
             <span className="status-pill ready">Build ready</span>
-            <span className="status-pill">Mock data</span>
+            <span className="status-pill">Perplexity ready</span>
             <span className="status-pill">{savedRecords.length} saved</span>
           </div>
         </header>
@@ -123,13 +216,15 @@ export default function HomePage() {
               onTopic={(v) => { setTopic(v); loadSearch(query, v, source, sort); }}
               onSource={(v) => { setSource(v); loadSearch(query, topic, v, sort); }}
               onSort={(v) => { setSort(v); loadSearch(query, topic, source, v); }}
-              onSearch={() => loadSearch()}
+              onSearch={runResearch}
               onSelect={(id) => { setSelectedId(id); loadDetail(id); }}
               onTab={setTab}
+              isResearching={isResearching}
+              researchError={researchError}
             />
             <DetailPanel
               detail={detail}
-              onOpenReading={() => selectedId && loadReading(selectedId)}
+              onOpenReading={openCurrentReading}
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
             />

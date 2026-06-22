@@ -5,6 +5,18 @@ type Props = {
   isSaved: boolean;
 };
 
+function citationLabel(citation: string) {
+  try {
+    return new URL(citation).hostname.replace(/^www\./, '');
+  } catch {
+    return citation;
+  }
+}
+
+function isUrl(value: string) {
+  return /^https?:\/\//.test(value);
+}
+
 export function DetailPanel({ detail, onOpenReading, onSave, isSaved }: Props) {
   if (!detail) {
     return (
@@ -43,20 +55,26 @@ export function DetailPanel({ detail, onOpenReading, onSave, isSaved }: Props) {
 
       <section className="answer-section">
         <h3>Evidence notes</h3>
-      <div className="stack">
-        {detail.facts?.map((f: string) => (
+        <div className="stack">
+          {detail.facts?.map((f: string) => (
             <div key={f} className="fact-line">{f}</div>
-        ))}
-      </div>
+          ))}
+        </div>
       </section>
 
       <section className="answer-section">
         <h3>Citations</h3>
         <div className="citation-row">
-        {detail.citations?.map((c: string) => (
-          <span key={c} className="citation">{c}</span>
-        ))}
-      </div>
+          {detail.citations?.map((c: string) => (
+            isUrl(c) ? (
+              <a key={c} className="citation" href={c} target="_blank" rel="noreferrer">
+                {citationLabel(c)}
+              </a>
+            ) : (
+              <span key={c} className="citation">{c}</span>
+            )
+          ))}
+        </div>
       </section>
 
       <div className="action-row">

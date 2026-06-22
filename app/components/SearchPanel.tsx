@@ -3,10 +3,10 @@ type Result = {
   title: string;
   topic: string;
   source: string;
-  score: number;
+  score?: number;
   summary: string;
-  facts: string[];
-  citations: string[];
+  facts?: string[];
+  citations?: string[];
 };
 
 type Props = {
@@ -24,13 +24,15 @@ type Props = {
   onSearch: () => void;
   onSelect: (id: string) => void;
   onTab: (v: string) => void;
+  isResearching: boolean;
+  researchError: string | null;
 };
 
 export function SearchPanel(props: Props) {
   const citations = [
     ...new Set(
       props.items.flatMap((item) =>
-        item.citations.map((c) => `${c} · ${item.source}`)
+        (item.citations ?? []).map((c) => `${c} · ${item.source}`)
       )
     )
   ];
@@ -52,8 +54,19 @@ export function SearchPanel(props: Props) {
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
           placeholder="Issuer, bond, budget, filing, source..."
         />
-        <button className="icon-button primary" onClick={props.onSearch} aria-label="Run research search">⌕</button>
+        <button
+          className="icon-button primary"
+          onClick={props.onSearch}
+          aria-label="Run research search"
+          disabled={props.isResearching}
+        >
+          {props.isResearching ? '…' : '⌕'}
+        </button>
       </div>
+
+      {props.researchError && (
+        <div className="error-banner">{props.researchError}</div>
+      )}
 
       <div className="filters">
         <label>
@@ -121,7 +134,7 @@ export function SearchPanel(props: Props) {
                   </div>
                   <h3>{item.title}</h3>
                 </div>
-                <span className="badge">{item.score}</span>
+                <span className="badge">{item.score ?? 'Live'}</span>
               </div>
               <p className="muted">{item.summary}</p>
             </article>
@@ -136,7 +149,7 @@ export function SearchPanel(props: Props) {
             <h3>{props.items[0].title}</h3>
             <p className="muted">{props.items[0].summary}</p>
           </div>
-          {props.items[0].facts.map((f) => <div key={f} className="fact-line">{f}</div>)}
+          {(props.items[0].facts ?? []).map((f) => <div key={f} className="fact-line">{f}</div>)}
         </div>
       )}
 

@@ -4,14 +4,25 @@ A California public finance AI research workspace built with Next.js App Router.
 
 ## Features
 - Componentized frontend (Search, Detail, Reading, Sources)
-- App Router route handlers as mock API
-- Local mock data for Open FI$Cal, California Budget, CDIAC, Debt Line
+- App Router route handlers for live research and source search
+- Perplexity Sonar-backed research answers with citations
+- Open FI$Cal search via the California CKAN API
 
 ## Mock endpoints
 - `GET /api/search?q=&topic=&source=&sort=`
 - `GET /api/sources`
 - `GET /api/result/[id]`
 - `GET /api/reading/[id]`
+- `POST /api/research`
+
+## Environment variables
+
+Create `.env.local` for local development, or add these in Vercel Project Settings:
+
+```bash
+PUBFIN_API_KEY=your_perplexity_api_key
+PUBFIN_MODEL=sonar-pro
+```
 
 ## Getting started
 
