@@ -60,6 +60,10 @@ const PROMPT_MODE_OPTIONS = {
     label: 'Risk / News Monitoring',
     description: 'Recent developments, litigation, rate actions, regulation, and infrastructure risks.',
   },
+  'peer-comparison': {
+    label: 'Peer Comparison',
+    description: 'Peer issuers, relative credit metrics, and comparable municipal utility context.',
+  },
   'custom-prompt': {
     label: 'Custom Prompt',
     description: 'User-defined public finance research angle.',
@@ -74,8 +78,20 @@ const FINANCE_FOCUSED_MODES = new Set<PromptMode>([
   'debt-bond-research',
   'financial-performance',
   'risk-news-monitoring',
+  'peer-comparison',
   'custom-prompt',
 ]);
+
+const DEFAULT_WORKFLOW_OPTIONS = {
+  includeLiveSearch: true,
+  includePerplexity: true,
+  includeOpenaiSynthesis: true,
+  includeDocumentInventory: true,
+  includeSourceTiers: true,
+  includeCoverageDashboard: true,
+  includeMissingData: true,
+  includeExport: true,
+};
 
 function sourceLabel(url: string) {
   try {
@@ -123,6 +139,13 @@ function normalizePromptMode(value: unknown): PromptMode {
   }
 
   return 'issuer-credit-profile';
+}
+
+function normalizeWorkflowOptions(value: any) {
+  return {
+    ...DEFAULT_WORKFLOW_OPTIONS,
+    ...(value && typeof value === 'object' ? value : {}),
+  };
 }
 
 function uniqueQueries(queries: string[]) {
@@ -193,6 +216,14 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
       `${issuer} regulatory risk`,
       `${issuer} recent developments`,
     ],
+    'peer-comparison': [
+      `${issuer} peer comparison municipal utility`,
+      `${issuer} compared with SMUD NYPA LADWP TWDB`,
+      `${issuer} rating report peer comparison`,
+      `${issuer} public power credit metrics`,
+      `${issuer} municipal utility debt service coverage peers`,
+      `${issuer} revenue bond rating medians`,
+    ],
     'custom-prompt': [
       custom,
       `${issuer} official statement rating ACFR`,
@@ -210,42 +241,54 @@ function documentTypeFor(result: SonarSearchResult) {
   const text = `${result.title ?? ''} ${result.snippet ?? ''} ${result.url ?? ''}`.toLowerCase();
 
   if (/annual comprehensive financial report|\bacfr\b|audited financial|financial statements/.test(text)) {
-    return 'ACFR / audited financials';
+    return 'ACFR / Audited Financial Statements';
   }
 
-  if (/preliminary official statement|\bpos\b|official statement/.test(text)) {
+  if (/preliminary official statement|\bpos\b/.test(text)) {
+    return 'Preliminary Official Statement';
+  }
+
+  if (/official statement/.test(text)) {
     return 'Official Statement';
   }
 
   if (/emma|msrb|continuing disclosure|annual disclosure/.test(text)) {
-    return 'Continuing disclosure / EMMA';
+    return 'Continuing Disclosure';
   }
 
   if (/rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra|bond rating/.test(text)) {
-    return 'Rating report / action';
+    return 'Rating Report';
   }
 
-  if (/investor relation|bondholder|debt|revenue bond|bond document/.test(text)) {
-    return 'Debt / investor materials';
+  if (/investor relation|bondholder|bond document/.test(text)) {
+    return 'Investor Relations';
   }
 
   if (/budget|capital improvement|\bcip\b|financial plan/.test(text)) {
-    return 'Budget / CIP';
+    return /capital improvement|\bcip\b/.test(text) ? 'Capital Improvement Plan' : 'Budget';
   }
 
   if (/rate study|rate action|rate increase|rate ordinance/.test(text)) {
-    return 'Rate / regulatory material';
+    return 'Rate Study';
   }
 
   if (/litigation|wildfire|regulatory|risk|lawsuit|court/.test(text)) {
-    return 'Risk / legal development';
+    return 'Legal / Litigation';
   }
 
   if (/news|press|article|youtube|blog/.test(text)) {
-    return 'Media / secondary source';
+    return 'News / Media';
   }
 
-  return 'General source';
+  if (/technical|study|nrel|white paper|industry report/.test(text)) {
+    return 'Technical Study';
+  }
+
+  if (/board|city clerk|clerk filing|ordinance|resolution/.test(text)) {
+    return 'Board / City Clerk Filing';
+  }
+
+  return 'Other';
 }
 
 function classifySourceTier(result: SonarSearchResult) {
@@ -378,6 +421,106 @@ function buildDocumentInventory(results: SonarSearchResult[]) {
       notes: result.notes || '',
       url: result.url,
     }));
+}
+
+function sourceConfidence(result: SonarSearchResult) {
+  if ((result.sourceTierRank ?? 4) <= 1) return 'high';
+  if ((result.sourceTierRank ?? 4) <= 2) return 'medium';
+  return 'low';
+}
+
+function normalizeCoverage(value: { status: string; confidence: string }) {
+  return {
+    status: value.status.toLowerCase(),
+    confidence: value.confidence.toLowerCase(),
+  };
+}
+
+function buildCoverageDashboardObject(results: SonarSearchResult[]) {
+  return {
+    audited_financials: normalizeCoverage(
+      coverageStatus(results, /annual comprehensive financial report|\bacfr\b|audited financial|financial statements/)
+    ),
+    official_statement: normalizeCoverage(
+      coverageStatus(results, /official statement|preliminary official statement|\bpos\b/)
+    ),
+    ratings: normalizeCoverage(
+      coverageStatus(results, /rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra/)
+    ),
+    continuing_disclosure: normalizeCoverage(
+      coverageStatus(results, /emma|msrb|continuing disclosure|annual disclosure/)
+    ),
+    recent_risk_events: normalizeCoverage(
+      coverageStatus(results, /litigation|wildfire|regulatory|rate increase|recent developments|risk/)
+    ),
+  };
+}
+
+function buildRawEvidenceNotes(results: SonarSearchResult[]) {
+  return results
+    .filter((result) => result.snippet || result.title)
+    .slice(0, 12)
+    .map((result) => ({
+      claim: result.snippet || result.title || 'Source candidate found.',
+      source_title: result.title || (result.url ? sourceLabel(result.url) : 'Untitled source'),
+      source_url: result.url,
+      source_tier: result.sourceTier || 'Unclassified',
+      document_type: result.documentType || 'Other',
+      confidence: sourceConfidence(result),
+    }));
+}
+
+function buildMissingItems(coverage: Record<string, { status: string; confidence: string }>) {
+  const labels: Record<string, string> = {
+    audited_financials: 'Audited financial statements / ACFR',
+    official_statement: 'Latest official statement or POS',
+    ratings: "Current rating reports or rating action pages from Moody's, S&P, Fitch, or KBRA",
+    continuing_disclosure: 'Latest EMMA / MSRB annual continuing disclosure filing',
+    recent_risk_events: 'Recent risk event scan and monitoring update',
+  };
+
+  return Object.entries(coverage)
+    .filter(([, value]) => value.status !== 'found')
+    .map(([key]) => labels[key] || key);
+}
+
+function buildEvidencePackage({
+  issuer,
+  modeLabel,
+  outputType,
+  timestamp,
+  searchQueries,
+  searchResults,
+}: {
+  issuer: string;
+  modeLabel: string;
+  outputType: string;
+  timestamp: string;
+  searchQueries: string[];
+  searchResults: SonarSearchResult[];
+}) {
+  const coverage = buildCoverageDashboardObject(searchResults);
+
+  return {
+    issuer,
+    research_mode: modeLabel,
+    output_type: outputType,
+    search_timestamp: timestamp,
+    search_queries_used: searchQueries,
+    document_inventory: buildDocumentInventory(searchResults).map((item) => ({
+      title: item.document,
+      document_type: item.type,
+      source_tier: item.sourceTier,
+      source_url: item.url,
+      date: item.date,
+      status: item.status.toLowerCase(),
+      confidence: item.sourceTier.startsWith('Tier 1') ? 'high' : 'medium',
+      notes: item.notes,
+    })),
+    coverage_dashboard: coverage,
+    raw_evidence_notes: buildRawEvidenceNotes(searchResults),
+    missing_items: buildMissingItems(coverage),
+  };
 }
 
 function candidateSourceList(results: SonarSearchResult[]) {
@@ -537,6 +680,8 @@ export async function POST(request: Request) {
   const source = String(body.source ?? 'all');
   const promptMode = normalizePromptMode(body.promptMode);
   const customAngle = String(body.customAngle ?? '').trim();
+  const outputType = String(body.outputType ?? 'credit-memo').trim();
+  const workflowOptions = normalizeWorkflowOptions(body.workflowOptions);
   const mode = PROMPT_MODE_OPTIONS[promptMode];
   const financeFocused = FINANCE_FOCUSED_MODES.has(promptMode);
   const timestamp = new Date().toISOString();
@@ -547,9 +692,11 @@ export async function POST(request: Request) {
 
   const model = process.env.PUBFIN_MODEL || 'sonar-pro';
   const searchQueries = buildSearchQueries(query, promptMode, customAngle);
-  const searchSettled = await Promise.allSettled(
-    searchQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
-  );
+  const searchSettled = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity
+    ? await Promise.allSettled(
+      searchQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
+    )
+    : [];
   const searchApiResults = searchSettled.flatMap((result) =>
     result.status === 'fulfilled' ? result.value : []
   );
@@ -581,6 +728,7 @@ export async function POST(request: Request) {
     `Question: ${query}`,
     `Research prompt mode: ${mode.label}`,
     `Mode description: ${mode.description}`,
+    `Requested output type: ${outputType}`,
     customAngle ? `Custom research angle: ${customAngle}` : null,
     `Preferred topic filter: ${topic}`,
     `Preferred source filter: ${source}`,
@@ -641,6 +789,7 @@ export async function POST(request: Request) {
   ).map((result) => result.url).filter(Boolean) as string[];
   const facts = [
     `${mode.label} mode`,
+    `Output type requested: ${outputType}`,
     financeFocused
       ? finalCoreFinanceDocumentsFound
         ? 'Core finance documents were found in this search run.'
@@ -648,6 +797,14 @@ export async function POST(request: Request) {
       : 'General research mode.',
     ...sourceFacts(searchResults),
   ];
+  const evidencePackage = buildEvidencePackage({
+    issuer: query,
+    modeLabel: mode.label,
+    outputType,
+    timestamp,
+    searchQueries,
+    searchResults,
+  });
 
   return NextResponse.json({
     record: {
@@ -662,6 +819,23 @@ export async function POST(request: Request) {
       facts: facts.length > 0 ? facts : ['Perplexity returned an answer, but no source snippets were included.'],
       citations,
       searchResults,
+      workflowInput: {
+        issuer: query,
+        research_mode: mode.label,
+        custom_prompt: customAngle || null,
+        output_type: outputType,
+        include_live_search: workflowOptions.includeLiveSearch,
+        include_perplexity: workflowOptions.includePerplexity,
+        include_openai_synthesis: workflowOptions.includeOpenaiSynthesis,
+        include_document_inventory: workflowOptions.includeDocumentInventory,
+        include_source_tiers: workflowOptions.includeSourceTiers,
+        include_coverage_dashboard: workflowOptions.includeCoverageDashboard,
+        include_missing_data: workflowOptions.includeMissingData,
+        include_export: workflowOptions.includeExport,
+      },
+      workflowOptions,
+      outputType,
+      evidencePackage,
       promptMode,
       researchModeLabel: mode.label,
       customAngle,

@@ -10,6 +10,9 @@ A California public finance AI research workspace built with Next.js App Router.
 - Research prompt modes for issuer credit, document discovery, debt, financial performance, risk monitoring, and custom angles
 - Source tiering for public-finance evidence quality, with document inventory and coverage dashboard
 - OpenAI-powered report writer for credit memos, IC memos, rating committee memos, diligence reports, board briefings, and executive summaries
+- Four-step research workflow tabs: Input, Discovery, Generated Report, and Export
+- Exportable Markdown, PDF, Word-compatible `.doc`, and evidence JSON files
+- Optional Supabase-backed research library persistence with local fallback
 - Open FI$Cal search via the California CKAN API
 
 ## Mock endpoints
@@ -18,6 +21,9 @@ A California public finance AI research workspace built with Next.js App Router.
 - `GET /api/result/[id]`
 - `GET /api/reading/[id]`
 - `POST /api/research`
+- `POST /api/report`
+- `POST /api/export/pdf`
+- `POST /api/library`
 
 ## Environment variables
 
@@ -28,10 +34,13 @@ PUBFIN_API_KEY=your_perplexity_api_key
 PUBFIN_MODEL=sonar-pro
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 `PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results.
 `OPENAI_API_KEY` is used by the report writer to turn structured research packages into deliverable work products.
+Supabase variables are optional. If omitted, saved records stay in the browser's local research library.
 
 ## Getting started
 
@@ -54,6 +63,8 @@ app/
     sources/         # GET /api/sources
     research/        # POST /api/research
     report/          # POST /api/report
+    library/         # POST /api/library
+    export/pdf/      # POST /api/export/pdf
     result/[id]/     # GET /api/result/:id
     reading/[id]/    # GET /api/reading/:id
   components/
@@ -71,6 +82,42 @@ lib/
 - Connect Open FI$Cal and California Budget real data
 - Add vector search (pgvector) for RAG
 - Deploy to Vercel
+
+## Optional Supabase tables
+
+```sql
+create table if not exists research_runs (
+  id uuid primary key default gen_random_uuid(),
+  issuer text not null,
+  research_mode text,
+  output_type text,
+  status text default 'completed',
+  search_timestamp timestamptz,
+  created_at timestamptz default now()
+);
+
+create table if not exists research_outputs (
+  id uuid primary key default gen_random_uuid(),
+  research_run_id uuid references research_runs(id),
+  output_format text,
+  file_path text,
+  content text,
+  created_at timestamptz default now()
+);
+
+create table if not exists research_sources (
+  id uuid primary key default gen_random_uuid(),
+  research_run_id uuid references research_runs(id),
+  title text,
+  source_url text,
+  source_tier text,
+  document_type text,
+  source_date text,
+  confidence text,
+  notes text,
+  created_at timestamptz default now()
+);
+```
 
 ## Data sources
 - [Open FI$Cal](https://open.fiscal.ca.gov) — State expenditure transparency portal

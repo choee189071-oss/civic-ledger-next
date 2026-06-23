@@ -16,12 +16,16 @@ type Props = {
   sort: string;
   promptMode: string;
   customAngle: string;
+  reportTemplate: string;
+  workflowOptions: Record<string, boolean>;
   items: Result[];
   selectedId: string | null;
   tab: string;
   onQuery: (v: string) => void;
   onPromptMode: (v: string) => void;
   onCustomAngle: (v: string) => void;
+  onReportTemplate: (v: string) => void;
+  onWorkflowOption: (key: string, value: boolean) => void;
   onTopic: (v: string) => void;
   onSource: (v: string) => void;
   onSort: (v: string) => void;
@@ -39,7 +43,30 @@ const promptModes = [
   ['debt-bond-research', 'Debt / Bond Research'],
   ['financial-performance', 'Financial Performance'],
   ['risk-news-monitoring', 'Risk / News Monitoring'],
+  ['peer-comparison', 'Peer Comparison'],
   ['custom-prompt', 'Custom Prompt'],
+];
+
+const outputTypes = [
+  ['research-brief', 'Research Brief'],
+  ['credit-memo', 'Credit Memo'],
+  ['investment-committee-memo', 'Investment Committee Memo'],
+  ['document-inventory-report', 'Document Inventory Report'],
+  ['executive-summary', 'Executive Summary'],
+  ['risk-monitor', 'Risk Monitor'],
+  ['source-appendix', 'Source Appendix'],
+  ['custom-report', 'Custom Report'],
+];
+
+const workflowOptionLabels = [
+  ['includeLiveSearch', 'Include live web search'],
+  ['includePerplexity', 'Include Perplexity search'],
+  ['includeOpenaiSynthesis', 'Include OpenAI synthesis'],
+  ['includeDocumentInventory', 'Include document inventory'],
+  ['includeSourceTiers', 'Include source tier ranking'],
+  ['includeCoverageDashboard', 'Include coverage dashboard'],
+  ['includeMissingData', 'Include missing-data section'],
+  ['includeExport', 'Include export file'],
 ];
 
 export function SearchPanel(props: Props) {
@@ -62,11 +89,13 @@ export function SearchPanel(props: Props) {
       </div>
 
       <div className="searchbox">
+        <label className="field-label" htmlFor="issuer-search">Issuer / Entity</label>
         <input
+          id="issuer-search"
           value={props.query}
           onChange={(e) => props.onQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
-          placeholder="Issuer, bond, budget, filing, source..."
+          placeholder="Example: LADWP, SMUD, TWDB, West Sacramento"
         />
         <button
           className="icon-button primary"
@@ -84,7 +113,7 @@ export function SearchPanel(props: Props) {
 
       <div className="prompt-builder">
         <label>
-          Prompt Mode
+          Research Mode
           <select value={props.promptMode} onChange={(e) => props.onPromptMode(e.target.value)}>
             {promptModes.map(([id, label]) => (
               <option key={id} value={id}>{label}</option>
@@ -94,15 +123,37 @@ export function SearchPanel(props: Props) {
 
         {props.promptMode === 'custom-prompt' && (
           <label>
-            Research Angle
+            Custom Research Angle
             <textarea
               value={props.customAngle}
               onChange={(e) => props.onCustomAngle(e.target.value)}
-              placeholder="Analyze LADWP as a public power and water revenue bond issuer."
+              placeholder={"Analyze LADWP as a municipal utility credit.\nFind LADWP's latest ACFR, official statements, and rating reports.\nEvaluate LADWP's power system revenue bond credit profile."}
               rows={4}
             />
           </label>
         )}
+
+        <label>
+          Output Type
+          <select value={props.reportTemplate} onChange={(e) => props.onReportTemplate(e.target.value)}>
+            {outputTypes.map(([id, label]) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="scope-toggle-grid" aria-label="System scope">
+          {workflowOptionLabels.map(([key, label]) => (
+            <label key={key} className="scope-toggle">
+              <input
+                type="checkbox"
+                checked={props.workflowOptions[key] ?? true}
+                onChange={(e) => props.onWorkflowOption(key, e.target.checked)}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="filters">

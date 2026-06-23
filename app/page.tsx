@@ -8,6 +8,17 @@ import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
 import { EvidencePanel } from './components/EvidencePanel';
 
+const defaultWorkflowOptions = {
+  includeLiveSearch: true,
+  includePerplexity: true,
+  includeOpenaiSynthesis: true,
+  includeDocumentInventory: true,
+  includeSourceTiers: true,
+  includeCoverageDashboard: true,
+  includeMissingData: true,
+  includeExport: true,
+};
+
 function normalizeRecord(item: any) {
   return {
     ...item,
@@ -37,6 +48,7 @@ export default function HomePage() {
   const [sort, setSort] = useState('score');
   const [tab, setTab] = useState('results');
   const [reportTemplate, setReportTemplate] = useState('credit-memo');
+  const [workflowOptions, setWorkflowOptions] = useState<Record<string, boolean>>(defaultWorkflowOptions);
   const [results, setResults] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -114,7 +126,15 @@ export default function HomePage() {
         fetch('/api/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, topic, source, promptMode, customAngle }),
+          body: JSON.stringify({
+            query,
+            topic,
+            source,
+            promptMode,
+            customAngle,
+            outputType: reportTemplate,
+            workflowOptions,
+          }),
         }),
         fetch(`/api/search?${new URLSearchParams({ q: query, topic, source, sort }).toString()}`),
       ]);
@@ -158,7 +178,7 @@ export default function HomePage() {
       const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ record: detail, template: reportTemplate }),
+        body: JSON.stringify({ record: detail, template: reportTemplate, workflowOptions }),
       });
 
       const payload = await res.json().catch(() => ({}));
@@ -179,6 +199,10 @@ export default function HomePage() {
     } finally {
       setIsGeneratingReport(false);
     }
+  }
+
+  function updateWorkflowOption(key: string, value: boolean) {
+    setWorkflowOptions((options) => ({ ...options, [key]: value }));
   }
 
   function openCurrentReading() {
@@ -215,6 +239,14 @@ export default function HomePage() {
 
   function saveRecord() {
     if (!detail) return;
+
+    fetch('/api/library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ record: detail, report: generatedReport }),
+    }).catch((error) => {
+      console.warn('[library] remote save failed, kept local copy:', error);
+    });
 
     setSavedRecords((records) => {
       const nextRecord = {
@@ -267,12 +299,16 @@ export default function HomePage() {
               sort={sort}
               promptMode={promptMode}
               customAngle={customAngle}
+              reportTemplate={reportTemplate}
+              workflowOptions={workflowOptions}
               items={results}
               selectedId={selectedId}
               tab={tab}
               onQuery={setQuery}
               onPromptMode={setPromptMode}
               onCustomAngle={setCustomAngle}
+              onReportTemplate={setReportTemplate}
+              onWorkflowOption={updateWorkflowOption}
               onTopic={(v) => { setTopic(v); loadSearch(query, v, source, sort); }}
               onSource={(v) => { setSource(v); loadSearch(query, topic, v, sort); }}
               onSort={(v) => { setSort(v); loadSearch(query, topic, source, v); }}

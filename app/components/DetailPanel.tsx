@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from 'react';
+
 type Props = {
   detail: any;
   reportTemplate: string;
@@ -12,13 +16,21 @@ type Props = {
 };
 
 const reportTemplates = [
-  ['general-research', 'General Research'],
+  ['research-brief', 'Research Brief'],
   ['credit-memo', 'Credit Memo'],
   ['investment-committee-memo', 'Investment Committee Memo'],
-  ['rating-committee-memo', 'Rating Committee Memo'],
-  ['due-diligence-report', 'Due Diligence Report'],
-  ['board-briefing', 'Board Briefing'],
+  ['document-inventory-report', 'Document Inventory Report'],
   ['executive-summary', 'Executive Summary'],
+  ['risk-monitor', 'Risk Monitor'],
+  ['source-appendix', 'Source Appendix'],
+  ['custom-report', 'Custom Report'],
+];
+
+const workflowTabs = [
+  ['input', 'Input'],
+  ['discovery', 'Discovery'],
+  ['report', 'Generated Report'],
+  ['export', 'Export'],
 ];
 
 function citationLabel(citation: string) {
@@ -33,6 +45,64 @@ function isUrl(value: string) {
   return /^https?:\/\//.test(value);
 }
 
+function slug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'research';
+}
+
+function downloadBlob(content: BlobPart, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function workflowInput(detail: any, reportTemplate: string) {
+  return detail.workflowInput ?? {
+    issuer: detail.title,
+    research_mode: detail.researchModeLabel ?? detail.topic,
+    output_type: reportTemplate,
+    custom_prompt: detail.customAngle || null,
+  };
+}
+
+function markdownFor(detail: any, generatedReport: any | null) {
+  const title = generatedReport?.title || detail.title || 'Research Report';
+  const report = generatedReport?.content || detail.snippet || '';
+  const citations = (detail.citations ?? []).map((citation: string) => `- ${citation}`).join('\n');
+
+  return [
+    `# ${title}`,
+    '',
+    `Generated: ${generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString()}`,
+    '',
+    report,
+    '',
+    '## Source Appendix',
+    citations || '- No citations available.',
+  ].join('\n');
+}
+
+function evidencePackageFor(detail: any) {
+  return detail.evidencePackage ?? {
+    issuer: detail.title,
+    research_mode: detail.researchModeLabel ?? detail.topic,
+    search_timestamp: detail.generatedAt,
+    search_queries_used: detail.searchQueries ?? [],
+    document_inventory: detail.documentInventory ?? [],
+    coverage_dashboard: detail.coverageDashboard ?? [],
+    raw_evidence_notes: detail.facts ?? [],
+    missing_items: [],
+  };
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
@@ -45,24 +115,90 @@ export function DetailPanel({
   onSave,
   isSaved,
 }: Props) {
+  const [activeTab, setActiveTab] = useState('discovery');
+  const [copyStatus, setCopyStatus] = useState('');
+
   if (!detail) {
     return (
       <section className="workspace-panel answer-panel empty-state">
-        <p className="eyebrow">Answer</p>
-        <h2>AI answer draft</h2>
-        <p className="muted">Select a research result to prepare a record.</p>
+        <p className="eyebrow">Workflow</p>
+        <h2>Research workflow</h2>
+        <p className="muted">Select a research result to prepare a deliverable.</p>
       </section>
     );
+  }
+
+  const input = workflowInput(detail, reportTemplate);
+  const evidencePackage = evidencePackageFor(detail);
+  const filenameBase = [
+    slug(detail.title || 'issuer'),
+    slug(detail.researchModeLabel || detail.topic || 'research'),
+    slug(generatedReport?.templateLabel || input.output_type || reportTemplate),
+    new Date().toISOString().slice(0, 10),
+  ].join('_');
+
+  function downloadMarkdown() {
+    downloadBlob(markdownFor(detail, generatedReport), `${filenameBase}.md`, 'text/markdown;charset=utf-8');
+  }
+
+  function downloadEvidenceJson() {
+    downloadBlob(
+      JSON.stringify(evidencePackage, null, 2),
+      `${slug(detail.title || 'issuer')}_${slug(detail.researchModeLabel || 'research')}_evidence_package_${new Date().toISOString().slice(0, 10)}.json`,
+      'application/json;charset=utf-8'
+    );
+  }
+
+  function downloadWord() {
+    const html = [
+      '<!doctype html><html><head><meta charset="utf-8">',
+      `<title>${generatedReport?.title || detail.title}</title>`,
+      '</head><body>',
+      `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${markdownFor(detail, generatedReport)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')}</pre>`,
+      '</body></html>',
+    ].join('');
+    downloadBlob(html, `${filenameBase}.doc`, 'application/msword;charset=utf-8');
+  }
+
+  async function downloadPdf() {
+    const res = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: generatedReport?.title || detail.title,
+        content: markdownFor(detail, generatedReport),
+        filename: `${filenameBase}.pdf`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filenameBase}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function copyReport() {
+    await navigator.clipboard.writeText(markdownFor(detail, generatedReport));
+    setCopyStatus('Copied');
+    window.setTimeout(() => setCopyStatus(''), 1600);
   }
 
   return (
     <section className="workspace-panel answer-panel">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Answer</p>
+          <p className="eyebrow">Workflow</p>
           <h2>{detail.title}</h2>
         </div>
-        <span className="status-pill ready">Ready to review</span>
+        <span className="status-pill ready">4-step run</span>
       </div>
 
       <div className="answer-summary">
@@ -76,70 +212,195 @@ export function DetailPanel({
       )}
 
       <div className="record-meta">
-        <span>{detail.topic}</span>
-        {detail.researchModeLabel && detail.researchModeLabel !== detail.topic && (
-          <span>{detail.researchModeLabel}</span>
-        )}
+        <span>{detail.researchModeLabel ?? detail.topic}</span>
+        <span>{generatedReport?.templateLabel || input.output_type || reportTemplate}</span>
         <span>{detail.source}</span>
-        <span>Score {detail.score}</span>
       </div>
 
-      <section className="answer-section">
-        <h3>Working conclusion</h3>
-        <p className="muted answer-body">{detail.snippet}</p>
-      </section>
+      <div className="workflow-tabs">
+        {workflowTabs.map(([id, label]) => (
+          <button
+            key={id}
+            className={activeTab === id ? 'active' : ''}
+            onClick={() => setActiveTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {detail.coverageDashboard?.length > 0 && (
+      {activeTab === 'input' && (
         <section className="answer-section">
-          <h3>Coverage dashboard</h3>
-          <div className="mini-table">
-            <div className="mini-table-row header">
-              <span>Evidence Area</span>
-              <span>Status</span>
-              <span>Confidence</span>
-            </div>
-            {detail.coverageDashboard.map((row: any) => (
-              <div key={row.area} className="mini-table-row">
-                <span>{row.area}</span>
-                <span>{row.status}</span>
-                <span>{row.confidence}</span>
+          <h3>Input object</h3>
+          <div className="key-value-grid">
+            {Object.entries(input).map(([key, value]) => (
+              <div key={key}>
+                <span>{key}</span>
+                <strong>{typeof value === 'boolean' ? String(value) : value ? String(value) : 'null'}</strong>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {detail.documentInventory?.length > 0 && (
-        <section className="answer-section">
-          <h3>Document inventory</h3>
-          <div className="document-list">
-            {detail.documentInventory.map((row: any) => (
-              <article key={`${row.document}-${row.url ?? row.source}`} className="document-row">
-                <div>
-                  {row.url ? (
-                    <a href={row.url} target="_blank" rel="noreferrer">
-                      <strong>{row.document}</strong>
-                    </a>
-                  ) : (
-                    <strong>{row.document}</strong>
-                  )}
-                  <p className="muted small">{row.type} · {row.source} · {row.date}</p>
+      {activeTab === 'discovery' && (
+        <>
+          <section className="answer-section">
+            <h3>Discovery memo</h3>
+            <p className="muted answer-body">{detail.snippet}</p>
+          </section>
+
+          {detail.searchQueries?.length > 0 && (
+            <section className="answer-section">
+              <h3>Search queries used</h3>
+              <div className="stack">
+                {detail.searchQueries.map((query: string) => (
+                  <div key={query} className="fact-line">{query}</div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {detail.coverageDashboard?.length > 0 && (
+            <section className="answer-section">
+              <h3>Coverage dashboard</h3>
+              <div className="mini-table">
+                <div className="mini-table-row header">
+                  <span>Evidence Area</span>
+                  <span>Status</span>
+                  <span>Confidence</span>
                 </div>
-                <span className="tier-pill">{row.sourceTier}</span>
-              </article>
-            ))}
+                {detail.coverageDashboard.map((row: any) => (
+                  <div key={row.area} className="mini-table-row">
+                    <span>{row.area}</span>
+                    <span>{row.status}</span>
+                    <span>{row.confidence}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {detail.documentInventory?.length > 0 && (
+            <section className="answer-section">
+              <h3>Document inventory</h3>
+              <div className="document-list">
+                {detail.documentInventory.map((row: any) => (
+                  <article key={`${row.document}-${row.url ?? row.source}`} className="document-row">
+                    <div>
+                      {row.url ? (
+                        <a href={row.url} target="_blank" rel="noreferrer">
+                          <strong>{row.document}</strong>
+                        </a>
+                      ) : (
+                        <strong>{row.document}</strong>
+                      )}
+                      <p className="muted small">{row.type} · {row.source} · {row.date}</p>
+                    </div>
+                    <span className="tier-pill">{row.sourceTier}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {evidencePackage.raw_evidence_notes?.length > 0 && (
+            <section className="answer-section">
+              <h3>Raw evidence notes</h3>
+              <div className="stack">
+                {evidencePackage.raw_evidence_notes.slice(0, 8).map((item: any) => (
+                  <div key={`${item.source_title}-${item.claim}`} className="fact-line">
+                    {item.claim}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {evidencePackage.missing_items?.length > 0 && (
+            <section className="answer-section">
+              <h3>Missing items</h3>
+              <div className="stack">
+                {evidencePackage.missing_items.map((item: string) => (
+                  <div key={item} className="fact-line">{item}</div>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {activeTab === 'report' && (
+        <section className="answer-section report-workflow">
+          <div className="report-workflow-head">
+            <div>
+              <h3>LLM writer</h3>
+              <p className="muted small">Turn this evidence package into the selected professional output.</p>
+            </div>
+            <span className="status-pill">Layer 3</span>
           </div>
+
+          <div className="report-controls">
+            <label>
+              Output Type
+              <select value={reportTemplate} onChange={(e) => onReportTemplate(e.target.value)}>
+                {reportTemplates.map(([id, label]) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="button-primary"
+              onClick={onGenerateReport}
+              disabled={isGeneratingReport}
+            >
+              {isGeneratingReport ? 'Generating...' : generatedReport ? 'Regenerate' : 'Generate report'}
+            </button>
+          </div>
+
+          {reportError && (
+            <div className="error-banner">{reportError}</div>
+          )}
+
+          {generatedReport ? (
+            <article className="generated-report">
+              <div className="record-meta">
+                <span>{generatedReport.templateLabel}</span>
+                <span>{generatedReport.model}</span>
+                <span>{new Date(generatedReport.generatedAt).toLocaleString()}</span>
+              </div>
+              <h3>{generatedReport.title}</h3>
+              <div className="report-body">{generatedReport.content}</div>
+            </article>
+          ) : (
+            <div className="empty-workflow-state">
+              Select an output type, then generate the professional report from the discovery package.
+            </div>
+          )}
         </section>
       )}
 
-      <section className="answer-section">
-        <h3>Evidence notes</h3>
-        <div className="stack">
-          {detail.facts?.map((f: string) => (
-            <div key={f} className="fact-line">{f}</div>
-          ))}
-        </div>
-      </section>
+      {activeTab === 'export' && (
+        <section className="answer-section report-workflow">
+          <div className="report-workflow-head">
+            <div>
+              <h3>File output and export</h3>
+              <p className="muted small">Download or reuse the report and evidence package.</p>
+            </div>
+            <span className="status-pill">Layer 4</span>
+          </div>
+
+          <div className="export-grid">
+            <button className="button-secondary" onClick={downloadMarkdown}>Download Markdown</button>
+            <button className="button-secondary" onClick={downloadPdf}>Download PDF</button>
+            <button className="button-secondary" onClick={downloadWord}>Download Word</button>
+            <button className="button-secondary" onClick={downloadEvidenceJson}>Download Evidence JSON</button>
+            <button className="button-secondary" onClick={copyReport}>Copy to Clipboard</button>
+            <button className="button-primary" onClick={onSave}>{isSaved ? 'Saved to Library' : 'Save to Research Library'}</button>
+          </div>
+          {copyStatus && <p className="muted small">{copyStatus}</p>}
+        </section>
+      )}
 
       <section className="answer-section">
         <h3>Citations</h3>
@@ -154,50 +415,6 @@ export function DetailPanel({
             )
           ))}
         </div>
-      </section>
-
-      <section className="answer-section report-workflow">
-        <div className="report-workflow-head">
-          <div>
-            <h3>LLM writer</h3>
-            <p className="muted small">Turn this research package into a deliverable work product.</p>
-          </div>
-          <span className="status-pill">Layer 3</span>
-        </div>
-
-        <div className="report-controls">
-          <label>
-            Report Template
-            <select value={reportTemplate} onChange={(e) => onReportTemplate(e.target.value)}>
-              {reportTemplates.map(([id, label]) => (
-                <option key={id} value={id}>{label}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="button-primary"
-            onClick={onGenerateReport}
-            disabled={isGeneratingReport}
-          >
-            {isGeneratingReport ? 'Generating...' : 'Generate report'}
-          </button>
-        </div>
-
-        {reportError && (
-          <div className="error-banner">{reportError}</div>
-        )}
-
-        {generatedReport && (
-          <article className="generated-report">
-            <div className="record-meta">
-              <span>{generatedReport.templateLabel}</span>
-              <span>{generatedReport.model}</span>
-              <span>{new Date(generatedReport.generatedAt).toLocaleString()}</span>
-            </div>
-            <h3>{generatedReport.title}</h3>
-            <div className="report-body">{generatedReport.content}</div>
-          </article>
-        )}
       </section>
 
       <div className="action-row">

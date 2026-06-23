@@ -297,6 +297,13 @@ h3 {
   padding: 8px;
 }
 
+.field-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  grid-column: 1 / -1;
+}
+
 .searchbox input {
   border: 0;
   color: var(--color-text);
@@ -413,6 +420,30 @@ h3 {
   box-shadow: 0 0 0 2px #e5f3fb;
 }
 
+.scope-toggle-grid {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr;
+}
+
+.scope-toggle {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: 6px;
+  display: flex !important;
+  flex-direction: row;
+  gap: 8px !important;
+  min-height: 32px;
+  padding: 7px 9px;
+}
+
+.scope-toggle input {
+  height: 14px;
+  margin: 0;
+  width: 14px;
+}
+
 .segmented-control {
   background: var(--color-subtle);
   border: 1px solid var(--color-divider);
@@ -506,6 +537,59 @@ h3 {
   white-space: pre-wrap;
 }
 
+.workflow-tabs {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 3px;
+}
+
+.workflow-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 760;
+  min-height: 30px;
+}
+
+.workflow-tabs button.active {
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  color: var(--color-text);
+}
+
+.key-value-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.key-value-grid div {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.key-value-grid span {
+  color: var(--color-faint);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.key-value-grid strong {
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .mini-table,
 .document-list {
   border: 1px solid var(--color-divider);
@@ -595,6 +679,21 @@ h3 {
   font-size: 13px;
   line-height: 1.65;
   white-space: pre-wrap;
+}
+
+.export-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.empty-workflow-state {
+  background: #ffffff;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  line-height: 1.5;
+  padding: 14px;
 }
 
 .tier-pill {
@@ -794,6 +893,12 @@ h3 {
   .button-primary,
   .button-secondary {
     width: 100%;
+  }
+
+  .workflow-tabs,
+  .key-value-grid,
+  .export-grid {
+    grid-template-columns: 1fr;
   }
 
   .report-workflow-head,

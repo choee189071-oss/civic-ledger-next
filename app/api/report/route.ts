@@ -5,45 +5,73 @@ export const runtime = 'nodejs';
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 const REPORT_TEMPLATES = {
+  'research-brief': {
+    label: 'Research Brief',
+    audience: 'research analyst or manager who needs a clean, source-grounded brief',
+    sections: [
+      'Executive Summary',
+      'Issuer Overview',
+      'Key Findings',
+      'Source Coverage',
+      'Missing Information',
+      'Next Steps',
+    ],
+  },
   'general-research': {
     label: 'General Research',
     audience: 'research analyst or manager who needs a clean, source-grounded brief',
     sections: [
       'Executive Summary',
-      'What We Know',
-      'Evidence Base',
-      'Important Details',
-      'Open Questions',
-      'Recommended Next Steps',
+      'Issuer Overview',
+      'Key Findings',
+      'Source Coverage',
+      'Missing Information',
+      'Next Steps',
     ],
   },
   'credit-memo': {
     label: 'Credit Memo',
     audience: 'public finance credit analyst preparing an issuer memo',
     sections: [
+      'Credit Snapshot',
+      'Preliminary Credit View',
       'Executive Summary',
       'Issuer Overview',
+      'Ratings and Recent Actions',
       'Credit Strengths',
       'Credit Risks',
       'Financial Performance',
       'Debt Profile',
-      'Outlook',
+      'Capital Plan',
+      'Outlook / Monitoring Items',
       'Missing Information',
       'Recommended Next Steps',
+      'Source Appendix',
     ],
   },
   'investment-committee-memo': {
     label: 'Investment Committee Memo',
     audience: 'investment committee evaluating whether to advance or monitor a credit',
     sections: [
-      'Decision Context',
-      'Executive Summary',
-      'Key Investment Considerations',
-      'Financial and Debt Evidence',
-      'Risk Assessment',
-      'Committee Questions',
       'Recommendation',
-      'Missing Information',
+      'Investment Thesis',
+      'Key Credit Drivers',
+      'Downside Risks',
+      'Relative Value / Peer Context',
+      'Required Follow-Up',
+      'Source Appendix',
+    ],
+  },
+  'document-inventory-report': {
+    label: 'Document Inventory Report',
+    audience: 'analyst validating source coverage before drafting or committee review',
+    sections: [
+      'Search Diagnostics',
+      'Document Inventory',
+      'Source Tier Summary',
+      'Coverage Dashboard',
+      'Missing Documents',
+      'Recommended Follow-Up Searches',
     ],
   },
   'rating-committee-memo': {
@@ -74,6 +102,44 @@ const REPORT_TEMPLATES = {
       'Follow-Up Request List',
     ],
   },
+  'risk-monitor': {
+    label: 'Risk Monitor',
+    audience: 'portfolio monitor tracking recent developments and emerging credit risk',
+    sections: [
+      'Monitoring Summary',
+      'Recent Developments',
+      'Risk Signals',
+      'Source Coverage',
+      'Items Requiring Verification',
+      'Recommended Monitoring Queries',
+    ],
+  },
+  'source-appendix': {
+    label: 'Source Appendix',
+    audience: 'analyst who needs a reusable source trail and evidence package appendix',
+    sections: [
+      'Search Diagnostics',
+      'Source Tier Summary',
+      'Document Inventory',
+      'Raw Evidence Notes',
+      'Coverage Dashboard',
+      'Missing Items',
+      'Source URLs',
+    ],
+  },
+  'custom-report': {
+    label: 'Custom Report',
+    audience: 'public finance professional using the selected research mode and custom angle',
+    sections: [
+      'Executive Summary',
+      'Key Findings',
+      'Evidence Review',
+      'Implications',
+      'Missing Information',
+      'Recommended Next Steps',
+      'Source Appendix',
+    ],
+  },
   'board-briefing': {
     label: 'Board Briefing',
     audience: 'board member or senior executive who needs concise decisions and risks',
@@ -91,12 +157,11 @@ const REPORT_TEMPLATES = {
     label: 'Executive Summary',
     audience: 'senior leader who wants the shortest useful version',
     sections: [
-      'Bottom Line',
-      'Key Facts',
-      'Strengths',
-      'Risks',
-      'Missing Information',
-      'Next Steps',
+      'One-Paragraph Bottom Line',
+      'Three Key Strengths',
+      'Three Key Risks',
+      'Evidence Coverage Score',
+      'Next Step',
     ],
   },
 } as const;
@@ -145,6 +210,9 @@ function responseText(payload: any) {
 function compactRecord(record: any) {
   return {
     title: record?.title,
+    workflowInput: record?.workflowInput ?? null,
+    evidencePackage: record?.evidencePackage ?? null,
+    outputType: record?.outputType ?? null,
     researchMode: record?.researchModeLabel ?? record?.topic,
     generatedAt: record?.generatedAt,
     summary: record?.summary,
@@ -168,16 +236,28 @@ function compactRecord(record: any) {
   };
 }
 
-function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate]) {
+function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate], templateKey: ReportTemplate) {
+  const creditMemoRules = templateKey === 'credit-memo'
+    ? [
+      'For Credit Memo, include a top-level Credit Snapshot with exactly these fields when available: Issuer, Sector, Systems, State, Revenue pledge, Research mode, Evidence coverage score, Preliminary view, Confidence, Primary risks, Primary strengths, Final recommendation status.',
+      'For Preliminary view, avoid final recommendations unless required Tier 1 documents are found. If evidence is incomplete, mark the view preliminary and explain the missing documents.',
+    ]
+    : [];
+
   return [
     'You are Civic Ledger Writer, a senior public finance analyst and report editor.',
     'Transform the supplied structured research package into a polished deliverable report.',
     'Preserve useful detail: keep important dollar amounts, ratios, dates, document names, source tiers, issuer/system distinctions, and caveats.',
     'Make the report easy to read: use concise headings, short paragraphs, bullets, and tables where helpful.',
     'Do not invent facts, ratings, metrics, documents, or conclusions not supported by the package.',
+    'Separate facts, inferences, and recommendations.',
     'If the package says core finance documents are missing, clearly state that the output is preliminary and not a credit conclusion.',
     'Use Tier 1 and Tier 2 sources for conclusions; Tier 3 can provide technical context; Tier 4 should only be mentioned as low-priority context.',
     'Keep source references visible in plain text using source names, document names, and URLs where available.',
+    'Distinguish Power System and Water System conclusions when the package separates them.',
+    'Mark any unverified value as "to be verified".',
+    'Avoid overlong raw evidence dumps in the main memo; put long source details in the appendix.',
+    ...creditMemoRules,
     `Audience: ${template.audience}.`,
     `Required report sections, in this order: ${template.sections.join(' | ')}.`,
     'Write in professional English unless the supplied research package is primarily Chinese.',
@@ -218,7 +298,7 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       model,
-      instructions: reportInstructions(template),
+      instructions: reportInstructions(template, templateKey),
       input: [
         'Generate the selected report template from this research package.',
         `Selected template: ${template.label}`,
