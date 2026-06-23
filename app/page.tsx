@@ -6,7 +6,6 @@ import { SearchPanel } from './components/SearchPanel';
 import { DetailPanel } from './components/DetailPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
-import { EvidencePanel } from './components/EvidencePanel';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -335,7 +334,6 @@ export default function HomePage() {
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
             />
-            <EvidencePanel detail={detail} sources={sources} onOpenSources={() => setView('sources')} />
           </section>
         )}
 
