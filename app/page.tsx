@@ -7,6 +7,7 @@ import { DetailPanel } from './components/DetailPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
 import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
+import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -414,6 +415,19 @@ export default function HomePage() {
     setView('reading');
   }
 
+  function startIssuerDevelopmentScan(issuer: string, mode: string, angle: string) {
+    setQuery(issuer);
+    setPromptMode('custom-prompt');
+    setCustomAngle(`${mode}: ${angle}`);
+    setReportTemplate('research-brief');
+    setTopic('all');
+    setSource('all');
+    setSort('freshness');
+    setGeneratedReport(null);
+    setReportError(null);
+    setView('search');
+  }
+
   function openCurrentReading() {
     if (!detail) return;
 
@@ -596,6 +610,12 @@ export default function HomePage() {
             onUpdateContent={updateReadingContent}
             onAddAnnotation={addReadingAnnotation}
             onDeleteAnnotation={deleteReadingAnnotation}
+          />
+        )}
+        {view === 'developments' && (
+          <IssuerDevelopmentsPanel
+            savedRecords={savedRecords}
+            onRunIssuerScan={startIssuerDevelopmentScan}
           />
         )}
         {view === 'sources' && (
