@@ -1339,6 +1339,58 @@ h3 {
   font-size: 18px;
 }
 
+.ccd-update-console {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.ccd-progress {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.ccd-progress span {
+  background: var(--color-primary);
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.ccd-update-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 620px;
+  overflow: auto;
+}
+
+.ccd-update-row {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 12px;
+}
+
+.ccd-update-row.active {
+  border-color: #9dcced;
+  box-shadow: 0 0 0 2px #e5f3fb;
+}
+
+.ccd-update-row h3 {
+  font-size: 14px;
+  margin-top: 8px;
+}
+
 .issuer-browser {
   background: #fbfcfd;
   border: 1px solid var(--color-divider);
@@ -1525,7 +1577,8 @@ h3 {
   .export-grid,
   .compare-grid,
   .sector-tabs,
-  .track-grid {
+  .track-grid,
+  .ccd-update-grid {
     grid-template-columns: 1fr;
   }
 

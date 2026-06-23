@@ -7,6 +7,14 @@ type Props = {
   onRunIssuerScan: (issuer: string, mode: string, angle: string) => void;
 };
 
+type CcdUpdate = {
+  issuer: string;
+  update: string;
+  citations?: string[];
+  error?: string;
+  timestamp?: string;
+};
+
 const ccdIssuers = [
   'Los Angeles CCD',
   'San Diego CCD',
@@ -145,23 +153,14 @@ function matchesIssuer(record: any, issuer: string) {
   return text.includes(issuer.toLowerCase());
 }
 
-function ccdGeneralUpdatePrompt() {
-  return [
-    'CCD_GENERAL_UPDATE',
-    'Task: review every issuer in ALL_CCD_ISSUERS for material recent developments.',
-    'Only include CCDs with credible new developments in the report. Do not force a section for issuers where no credible recent development is found.',
-    'Material developments include rating actions, outlook changes, bond issuance, EMMA/MSRB continuing disclosure, official statements, board actions, adopted or tentative budgets, enrollment changes, state funding items, labor items, capital projects, facilities bonds, litigation, accreditation, or governance issues.',
-    'For each CCD with a development, include: issuer name, development type, date if available, source link, source tier, why it matters for credit/research, and recommended follow-up.',
-    'Add a final section called "No material update found in this scan" listing CCDs that were checked but did not have a material update in the returned evidence.',
-    'Be explicit that this is a live scan and not a full credit opinion.',
-    `ALL_CCD_ISSUERS: ${ccdIssuers.join('; ')}`,
-  ].join('\n');
-}
-
 export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props) {
   const [sectorId, setSectorId] = useState('education-ccd');
   const [query, setQuery] = useState('');
   const [selectedIssuer, setSelectedIssuer] = useState(ccdIssuers[0]);
+  const [ccdUpdates, setCcdUpdates] = useState<CcdUpdate[]>([]);
+  const [isRunningGeneralUpdate, setIsRunningGeneralUpdate] = useState(false);
+  const [currentScanIssuer, setCurrentScanIssuer] = useState('');
+  const [generalUpdateError, setGeneralUpdateError] = useState('');
   const sector = sectors.find((item) => item.id === sectorId) ?? sectors[0];
   const filteredIssuers = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -172,6 +171,82 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
 
   function runTrack(track: (typeof reportTracks)[number]) {
     onRunIssuerScan(selectedIssuer, track.mode, `${selectedIssuer} ${track.angle}`);
+  }
+
+  async function scanIssuer(issuer: string): Promise<CcdUpdate> {
+    const res = await fetch('/api/developments/issuer-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issuer }),
+    });
+    const payload = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return {
+        issuer,
+        update: `### ${issuer}\nStatus: Needs manual verification\nUpdate: The automated scan failed for this issuer. Re-run this issuer individually or verify manually.\nSource: ${payload.error || 'Scanner error'}`,
+        error: payload.error || 'Scan failed.',
+      };
+    }
+
+    return payload;
+  }
+
+  async function runFullCcdUpdate() {
+    setIsRunningGeneralUpdate(true);
+    setGeneralUpdateError('');
+    setCcdUpdates([]);
+
+    const nextUpdates: CcdUpdate[] = [];
+
+    try {
+      for (const issuer of ccdIssuers) {
+        setCurrentScanIssuer(issuer);
+        const update = await scanIssuer(issuer);
+        nextUpdates.push(update);
+        setCcdUpdates([...nextUpdates]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'General CCD update failed.';
+      setGeneralUpdateError(message);
+    } finally {
+      setCurrentScanIssuer('');
+      setIsRunningGeneralUpdate(false);
+    }
+  }
+
+  function ccdReportMarkdown() {
+    const date = new Date().toISOString();
+    const body = ccdUpdates.length > 0
+      ? ccdUpdates.map((item) => item.update).join('\n\n---\n\n')
+      : 'No issuer updates generated yet.';
+
+    return [
+      '# General CCD Update',
+      '',
+      `Generated: ${date}`,
+      `Coverage: ${ccdUpdates.length} of ${ccdIssuers.length} California CCD issuers`,
+      '',
+      'This is a monitoring scan, not a full credit opinion. Each issuer is checked separately and summarized in 2-3 sentences.',
+      '',
+      body,
+    ].join('\n');
+  }
+
+  async function copyCcdReport() {
+    await navigator.clipboard.writeText(ccdReportMarkdown());
+  }
+
+  function downloadCcdReport() {
+    const blob = new Blob([ccdReportMarkdown()], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `general_ccd_update_${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -212,14 +287,58 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
           </div>
           <button
             className="button-primary"
-            onClick={() => onRunIssuerScan(
-              'California Community College Districts',
-              'risk-news-monitoring',
-              ccdGeneralUpdatePrompt()
-            )}
+            onClick={runFullCcdUpdate}
+            disabled={isRunningGeneralUpdate}
           >
-            Run General CCD Update
+            {isRunningGeneralUpdate ? 'Running CCD Queue...' : 'Run General CCD Update'}
           </button>
+        </section>
+      )}
+
+      {sectorId === 'education-ccd' && (
+        <section className="ccd-update-console">
+          <div className="section-heading">
+            <div>
+              <h3>General CCD Update Report</h3>
+              <p className="muted small">
+                {isRunningGeneralUpdate
+                  ? `Scanning ${currentScanIssuer}...`
+                  : `${ccdUpdates.length} of ${ccdIssuers.length} issuers scanned`}
+              </p>
+            </div>
+            <div className="report-toolbar">
+              <button className="button-secondary" onClick={copyCcdReport} disabled={ccdUpdates.length === 0}>Copy Report</button>
+              <button className="button-secondary" onClick={downloadCcdReport} disabled={ccdUpdates.length === 0}>Download MD</button>
+            </div>
+          </div>
+
+          <div className="ccd-progress">
+            <span style={{ width: `${Math.round((ccdUpdates.length / ccdIssuers.length) * 100)}%` }} />
+          </div>
+
+          {generalUpdateError && <div className="error-banner">{generalUpdateError}</div>}
+
+          <div className="ccd-update-grid">
+            {ccdIssuers.map((issuer) => {
+              const update = ccdUpdates.find((item) => item.issuer === issuer);
+              const active = currentScanIssuer === issuer;
+
+              return (
+                <article key={issuer} className={`ccd-update-row ${active ? 'active' : ''}`}>
+                  <div>
+                    <div className="record-meta">
+                      <span>{update ? 'Checked' : active ? 'Scanning' : 'Queued'}</span>
+                      {update?.error && <span>Needs verification</span>}
+                    </div>
+                    <h3>{issuer}</h3>
+                    <p className="muted small">
+                      {update ? update.update.replace(/^### .+\n?/m, '').slice(0, 520) : active ? 'Live scan in progress...' : 'Waiting for issuer-specific scan.'}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       )}
 
