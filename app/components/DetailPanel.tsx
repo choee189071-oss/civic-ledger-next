@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { FormattedReport } from './FormattedReport';
 
 type Props = {
   detail: any;
@@ -8,7 +9,6 @@ type Props = {
   generatedReport: any | null;
   isGeneratingReport: boolean;
   reportError: string | null;
-  onReportTemplate: (value: string) => void;
   onGenerateReport: () => void;
   onOpenReading: () => void;
   onSave: () => void;
@@ -27,9 +27,8 @@ const reportTemplates = [
 ];
 
 const workflowTabs = [
-  ['input', 'Input'],
   ['discovery', 'Discovery'],
-  ['report', 'Generated Report'],
+  ['report', 'Generate'],
   ['export', 'Export'],
 ];
 
@@ -103,13 +102,16 @@ function evidencePackageFor(detail: any) {
   };
 }
 
+function templateLabel(value: string) {
+  return reportTemplates.find(([id]) => id === value)?.[1] ?? value;
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
   generatedReport,
   isGeneratingReport,
   reportError,
-  onReportTemplate,
   onGenerateReport,
   onOpenReading,
   onSave,
@@ -229,25 +231,23 @@ export function DetailPanel({
         ))}
       </div>
 
-      {activeTab === 'input' && (
-        <section className="answer-section">
-          <h3>Input object</h3>
-          <div className="key-value-grid">
-            {Object.entries(input).map(([key, value]) => (
-              <div key={key}>
-                <span>{key}</span>
-                <strong>{typeof value === 'boolean' ? String(value) : value ? String(value) : 'null'}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {activeTab === 'discovery' && (
         <>
           <section className="answer-section">
+            <h3>Research setup</h3>
+            <div className="key-value-grid">
+              {Object.entries(input).map(([key, value]) => (
+                <div key={key}>
+                  <span>{key}</span>
+                  <strong>{typeof value === 'boolean' ? String(value) : value ? String(value) : 'null'}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="answer-section">
             <h3>Discovery memo</h3>
-            <p className="muted answer-body">{detail.snippet}</p>
+            <FormattedReport content={detail.snippet} compact />
           </section>
 
           {detail.searchQueries?.length > 0 && (
@@ -335,20 +335,18 @@ export function DetailPanel({
           <div className="report-workflow-head">
             <div>
               <h3>LLM writer</h3>
-              <p className="muted small">Turn this evidence package into the selected professional output.</p>
+              <p className="muted small">
+                Output type is controlled from the intake panel. Regenerate after changing it.
+              </p>
             </div>
             <span className="status-pill">Layer 3</span>
           </div>
 
           <div className="report-controls">
-            <label>
-              Output Type
-              <select value={reportTemplate} onChange={(e) => onReportTemplate(e.target.value)}>
-                {reportTemplates.map(([id, label]) => (
-                  <option key={id} value={id}>{label}</option>
-                ))}
-              </select>
-            </label>
+            <div className="selected-template">
+              <span>Selected Output Type</span>
+              <strong>{templateLabel(reportTemplate)}</strong>
+            </div>
             <button
               className="button-primary"
               onClick={onGenerateReport}
@@ -370,11 +368,11 @@ export function DetailPanel({
                 <span>{new Date(generatedReport.generatedAt).toLocaleString()}</span>
               </div>
               <h3>{generatedReport.title}</h3>
-              <div className="report-body">{generatedReport.content}</div>
+              <FormattedReport content={generatedReport.content} />
             </article>
           ) : (
             <div className="empty-workflow-state">
-              Select an output type, then generate the professional report from the discovery package.
+              Choose the output type in Research intake, then generate the professional report from the discovery package.
             </div>
           )}
         </section>

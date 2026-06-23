@@ -1,6 +1,7 @@
 type Props = {
   detail: any;
   sources: any[];
+  onOpenSources: () => void;
 };
 
 function sourceLabel(url: string) {
@@ -11,7 +12,7 @@ function sourceLabel(url: string) {
   }
 }
 
-export function EvidencePanel({ detail, sources }: Props) {
+export function EvidencePanel({ detail, sources, onOpenSources }: Props) {
   const relatedSources = detail
     ? sources.filter((source) => source.name === detail.source || source.topic === detail.topic)
     : sources.slice(0, 3);
@@ -23,16 +24,20 @@ export function EvidencePanel({ detail, sources }: Props) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Evidence</p>
-          <h2>Sources</h2>
+          <h2>Evidence preview</h2>
         </div>
         <span className="count">{evidenceCount}</span>
       </div>
+
+      <button className="button-secondary" onClick={onOpenSources}>
+        Open Source List
+      </button>
 
       {detail && (
         <section className="evidence-block">
           <h3>Current citations</h3>
           <div className="stack">
-            {detail.citations?.map((citation: string) => (
+            {detail.citations?.slice(0, 4).map((citation: string) => (
               <div key={citation} className="source-row">
                 <span className="source-icon">↗</span>
                 <div>
@@ -55,7 +60,7 @@ export function EvidencePanel({ detail, sources }: Props) {
         <section className="evidence-block">
           <h3>Live search results</h3>
           <div className="stack">
-            {liveResults.slice(0, 12).map((result: any) => (
+            {liveResults.slice(0, 4).map((result: any) => (
               <article key={result.url || result.title} className="source-card">
                 <div className="record-meta">
                   {result.sourceTier && <span>{result.sourceTier}</span>}
@@ -78,23 +83,6 @@ export function EvidencePanel({ detail, sources }: Props) {
           </div>
         </section>
       )}
-
-      <section className="evidence-block">
-        <h3>Source registry</h3>
-        <div className="stack">
-          {relatedSources.map((source) => (
-            <article key={source.id} className="source-card">
-              <div className="record-meta">
-                <span>{source.topic}</span>
-                <span>{source.trust}</span>
-              </div>
-              <h3>{source.name}</h3>
-              <p className="muted small">{source.description}</p>
-              <span className="freshness">{source.freshness}</span>
-            </article>
-          ))}
-        </div>
-      </section>
     </aside>
   );
 }

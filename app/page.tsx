@@ -205,6 +205,12 @@ export default function HomePage() {
     setWorkflowOptions((options) => ({ ...options, [key]: value }));
   }
 
+  function updateReportTemplate(value: string) {
+    setReportTemplate(value);
+    setGeneratedReport(null);
+    setReportError(null);
+  }
+
   function openCurrentReading() {
     if (!detail) return;
 
@@ -307,7 +313,7 @@ export default function HomePage() {
               onQuery={setQuery}
               onPromptMode={setPromptMode}
               onCustomAngle={setCustomAngle}
-              onReportTemplate={setReportTemplate}
+              onReportTemplate={updateReportTemplate}
               onWorkflowOption={updateWorkflowOption}
               onTopic={(v) => { setTopic(v); loadSearch(query, v, source, sort); }}
               onSource={(v) => { setSource(v); loadSearch(query, topic, v, sort); }}
@@ -324,18 +330,17 @@ export default function HomePage() {
               generatedReport={generatedReport}
               isGeneratingReport={isGeneratingReport}
               reportError={reportError}
-              onReportTemplate={setReportTemplate}
               onGenerateReport={generateReport}
               onOpenReading={openCurrentReading}
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
             />
-            <EvidencePanel detail={detail} sources={sources} />
+            <EvidencePanel detail={detail} sources={sources} onOpenSources={() => setView('sources')} />
           </section>
         )}
 
         {view === 'reading' && <ReadingPanel item={reading} />}
-        {view === 'sources' && <SourcesPanel items={sources} />}
+        {view === 'sources' && <SourcesPanel items={sources} detail={detail} savedRecords={savedRecords} />}
       </main>
     </div>
   );

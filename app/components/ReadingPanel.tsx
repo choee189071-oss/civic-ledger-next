@@ -1,8 +1,12 @@
+import { FormattedReport } from './FormattedReport';
+
 type Props = {
   item: any;
 };
 
 export function ReadingPanel({ item }: Props) {
+  const content = (item?.body || ['Select a result and open reading mode.']).join('\n\n');
+
   return (
     <section className="full-page-panel reading-desk">
       <div className="panel-heading">
@@ -13,11 +17,7 @@ export function ReadingPanel({ item }: Props) {
         <span className="status-pill">Draft</span>
       </div>
       <div className="reading-body">
-        {(item?.body || ['Select a result and open reading mode.']).map(
-          (paragraph: string) => (
-            <p key={paragraph}>{paragraph}</p>
-          )
-        )}
+        <FormattedReport content={content} />
       </div>
     </section>
   );
