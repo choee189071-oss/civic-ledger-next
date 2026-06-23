@@ -148,6 +148,39 @@ const developmentSlots = [
   'Capital projects and facilities bonds',
 ];
 
+const monitoringConditions = [
+  {
+    id: 'board-minutes',
+    label: 'Board meeting minutes / packets',
+    prompt: 'board meeting minutes, board agenda, board packet, consent agenda, action items',
+  },
+  {
+    id: 'bond-authorization',
+    label: 'Bond authorization / resolution',
+    prompt: 'new bond deal, bond authorization, bond resolution, GO bonds, refunding bonds, official statement authorization',
+  },
+  {
+    id: 'advisor-counsel',
+    label: 'Municipal advisor / bond counsel',
+    prompt: 'hired municipal advisor, financial advisor, bond counsel, disclosure counsel, underwriter pool',
+  },
+  {
+    id: 'rfp',
+    label: 'RFP approvals / RFP results',
+    prompt: 'RFP approved to post, RFP results, award of contract, municipal finance RFP, bond counsel RFP',
+  },
+  {
+    id: 'ratings-disclosure',
+    label: 'Ratings / EMMA disclosure',
+    prompt: 'rating action, outlook change, EMMA continuing disclosure, MSRB filing, annual disclosure',
+  },
+  {
+    id: 'budget-enrollment',
+    label: 'Budget / enrollment / state funding',
+    prompt: 'budget adoption, tentative budget, enrollment, FTES, state apportionment, COLA, labor cost',
+  },
+];
+
 function matchesIssuer(record: any, issuer: string) {
   const text = `${record.title ?? ''} ${record.generatedReport?.title ?? ''}`.toLowerCase();
   return text.includes(issuer.toLowerCase());
@@ -159,6 +192,10 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
   const [query, setQuery] = useState('');
   const [selectedIssuer, setSelectedIssuer] = useState(ccdIssuers[0]);
   const [ccdUpdates, setCcdUpdates] = useState<CcdUpdate[]>([]);
+  const [selectedIssuers, setSelectedIssuers] = useState<string[]>(ccdIssuers);
+  const [selectedConditions, setSelectedConditions] = useState<string[]>(
+    monitoringConditions.map((condition) => condition.id)
+  );
   const [isRunningGeneralUpdate, setIsRunningGeneralUpdate] = useState(false);
   const [currentScanIssuer, setCurrentScanIssuer] = useState('');
   const [generalUpdateError, setGeneralUpdateError] = useState('');
@@ -174,11 +211,15 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     onRunIssuerScan(selectedIssuer, track.mode, `${selectedIssuer} ${track.angle}`);
   }
 
+  const selectedConditionPrompts = monitoringConditions
+    .filter((condition) => selectedConditions.includes(condition.id))
+    .map((condition) => `${condition.label}: ${condition.prompt}`);
+
   async function scanIssuer(issuer: string): Promise<CcdUpdate> {
     const res = await fetch('/api/developments/issuer-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ issuer }),
+      body: JSON.stringify({ issuer, conditions: selectedConditionPrompts }),
     });
     const payload = await res.json().catch(() => ({}));
 
@@ -194,6 +235,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
   }
 
   async function runFullCcdUpdate() {
+    const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
     setIsRunningGeneralUpdate(true);
     setGeneralUpdateError('');
     setCcdUpdates([]);
@@ -201,7 +243,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     const nextUpdates: CcdUpdate[] = [];
 
     try {
-      for (const issuer of ccdIssuers) {
+      for (const issuer of issuersToScan) {
         setCurrentScanIssuer(issuer);
         const update = await scanIssuer(issuer);
         nextUpdates.push(update);
@@ -226,7 +268,8 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
       '# General CCD Update',
       '',
       `Generated: ${date}`,
-      `Coverage: ${ccdUpdates.length} of ${ccdIssuers.length} California CCD issuers`,
+      `Coverage: ${ccdUpdates.length} of ${selectedIssuers.length || ccdIssuers.length} selected California CCD issuers`,
+      `Selected conditions: ${selectedConditionPrompts.join(' | ') || 'All standard conditions'}`,
       '',
       'This is a monitoring scan, not a full credit opinion. Each issuer is checked separately and summarized in 2-3 sentences.',
       '',
@@ -248,6 +291,40 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function downloadCcdPdf() {
+    const res = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'General CCD Update',
+        content: ccdReportMarkdown(),
+        filename: `general_ccd_update_${new Date().toISOString().slice(0, 10)}.pdf`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `general_ccd_update_${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function toggleIssuer(issuer: string) {
+    setSelectedIssuers((items) =>
+      items.includes(issuer) ? items.filter((item) => item !== issuer) : [...items, issuer]
+    );
+  }
+
+  function toggleCondition(conditionId: string) {
+    setSelectedConditions((items) =>
+      items.includes(conditionId) ? items.filter((item) => item !== conditionId) : [...items, conditionId]
+    );
   }
 
   return (
@@ -299,15 +376,15 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
               <p className="eyebrow">Batch Monitor</p>
               <h3>General CCD Update</h3>
               <p className="muted small">
-                Run a sector-wide queue across all {ccdIssuers.length} California CCD issuers. Each issuer is checked separately and summarized in 2-3 sentences.
+                Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately and summarized in 2-3 sentences.
               </p>
             </div>
             <button
               className="button-primary"
               onClick={runFullCcdUpdate}
-              disabled={isRunningGeneralUpdate}
+              disabled={isRunningGeneralUpdate || selectedIssuers.length === 0}
             >
-              {isRunningGeneralUpdate ? 'Running CCD Queue...' : 'Run General CCD Update'}
+              {isRunningGeneralUpdate ? 'Running CCD Queue...' : `Run ${selectedIssuers.length} Issuer Update`}
             </button>
           </section>
 
@@ -318,23 +395,75 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 <p className="muted small">
                   {isRunningGeneralUpdate
                     ? `Scanning ${currentScanIssuer}...`
-                    : `${ccdUpdates.length} of ${ccdIssuers.length} issuers scanned`}
+                    : `${ccdUpdates.length} of ${selectedIssuers.length || ccdIssuers.length} selected issuers scanned`}
                 </p>
               </div>
               <div className="report-toolbar">
                 <button className="button-secondary" onClick={copyCcdReport} disabled={ccdUpdates.length === 0}>Copy Report</button>
                 <button className="button-secondary" onClick={downloadCcdReport} disabled={ccdUpdates.length === 0}>Download MD</button>
+                <button className="button-secondary" onClick={downloadCcdPdf} disabled={ccdUpdates.length === 0}>Download PDF</button>
               </div>
             </div>
 
+            <div className="scan-config-grid">
+              <section className="scan-config-block">
+                <div className="section-heading">
+                  <div>
+                    <h3>Monitoring conditions</h3>
+                    <p className="muted small">These are included in every issuer-specific search prompt.</p>
+                  </div>
+                  <span className="status-pill">{selectedConditions.length} selected</span>
+                </div>
+                <div className="condition-grid">
+                  {monitoringConditions.map((condition) => (
+                    <label key={condition.id} className="condition-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedConditions.includes(condition.id)}
+                        onChange={() => toggleCondition(condition.id)}
+                      />
+                      <span>{condition.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section className="scan-config-block">
+                <div className="section-heading">
+                  <div>
+                    <h3>Issuer selection</h3>
+                    <p className="muted small">Run all CCDs or choose a subset for a faster targeted update.</p>
+                  </div>
+                  <span className="status-pill">{selectedIssuers.length} selected</span>
+                </div>
+                <div className="selection-actions">
+                  <button className="button-secondary" onClick={() => setSelectedIssuers(ccdIssuers)}>Select All</button>
+                  <button className="button-secondary" onClick={() => setSelectedIssuers(filteredIssuers)}>Select Filtered</button>
+                  <button className="button-secondary" onClick={() => setSelectedIssuers([])}>Clear</button>
+                </div>
+                <div className="issuer-checkbox-list">
+                  {filteredIssuers.map((issuer) => (
+                    <label key={issuer} className="issuer-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedIssuers.includes(issuer)}
+                        onChange={() => toggleIssuer(issuer)}
+                      />
+                      <span>{issuer}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            </div>
+
             <div className="ccd-progress">
-              <span style={{ width: `${Math.round((ccdUpdates.length / ccdIssuers.length) * 100)}%` }} />
+              <span style={{ width: `${Math.round((ccdUpdates.length / Math.max(selectedIssuers.length, 1)) * 100)}%` }} />
             </div>
 
             {generalUpdateError && <div className="error-banner">{generalUpdateError}</div>}
 
             <div className="ccd-update-grid">
-              {ccdIssuers.map((issuer) => {
+              {(selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers).map((issuer) => {
                 const update = ccdUpdates.find((item) => item.issuer === issuer);
                 const active = currentScanIssuer === issuer;
 
