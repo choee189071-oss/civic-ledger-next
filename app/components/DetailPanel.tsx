@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { htmlDocumentFromMarkdown } from './exportDocument';
 import { FormattedReport } from './FormattedReport';
 
 type Props = {
@@ -201,16 +202,10 @@ export function DetailPanel({
   }
 
   function downloadWord() {
-    const html = [
-      '<!doctype html><html><head><meta charset="utf-8">',
-      `<title>${generatedReport?.title || detail.title}</title>`,
-      '</head><body>',
-      `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${markdownFor(detail, generatedReport)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')}</pre>`,
-      '</body></html>',
-    ].join('');
+    const html = htmlDocumentFromMarkdown(
+      markdownFor(detail, generatedReport),
+      generatedReport?.title || detail.title || 'Research Report'
+    );
     downloadBlob(html, `${filenameBase}.doc`, 'application/msword;charset=utf-8');
   }
 

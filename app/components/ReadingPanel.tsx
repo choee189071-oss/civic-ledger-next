@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { htmlDocumentFromMarkdown } from './exportDocument';
 import { FormattedReport } from './FormattedReport';
 
 type Props = {
@@ -82,16 +83,33 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
   }
 
   function downloadWord() {
-    const body = annotatedMarkdown(title, content, annotations)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
     downloadBlob(
-      `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body><pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${body}</pre></body></html>`,
+      htmlDocumentFromMarkdown(annotatedMarkdown(title, content, annotations), title),
       `${slug(title)}_annotated.doc`,
       'application/msword;charset=utf-8'
     );
+  }
+
+  async function downloadPdf() {
+    const res = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        content: annotatedMarkdown(title, content, annotations),
+        filename: `${slug(title)}_annotated.pdf`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${slug(title)}_annotated.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -190,6 +208,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
 
           <div className="export-grid">
             <button className="button-secondary" onClick={downloadMarkdown}>Export MD</button>
+            <button className="button-secondary" onClick={downloadPdf}>Export PDF</button>
             <button className="button-secondary" onClick={downloadWord}>Export Word</button>
           </div>
         </aside>

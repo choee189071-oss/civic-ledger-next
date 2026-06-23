@@ -260,6 +260,9 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
 
   function ccdReportMarkdown() {
     const date = new Date().toISOString();
+    const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
+    const foundCount = ccdUpdates.filter((item) => /Status:\s*Development found/i.test(item.update)).length;
+    const verificationCount = ccdUpdates.filter((item) => /Status:\s*Needs manual verification/i.test(item.update)).length;
     const body = ccdUpdates.length > 0
       ? ccdUpdates.map((item) => item.update).join('\n\n---\n\n')
       : 'No issuer updates generated yet.';
@@ -268,10 +271,22 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
       '# General CCD Update',
       '',
       `Generated: ${date}`,
-      `Coverage: ${ccdUpdates.length} of ${selectedIssuers.length || ccdIssuers.length} selected California CCD issuers`,
-      `Selected conditions: ${selectedConditionPrompts.join(' | ') || 'All standard conditions'}`,
+      `Coverage: ${ccdUpdates.length} of ${issuersToScan.length} selected California CCD issuers`,
       '',
-      'This is a monitoring scan, not a full credit opinion. Each issuer is checked separately and summarized in 2-3 sentences.',
+      '## Executive Summary',
+      '',
+      `- ${foundCount} issuers had a potentially material recent development surfaced by the scan.`,
+      `- ${verificationCount} issuers require manual verification before the item should be treated as issuer-specific.`,
+      `- ${Math.max(issuersToScan.length - ccdUpdates.length, 0)} selected issuers have not been scanned in this run.`,
+      '- This is a monitoring scan, not a credit opinion. Each issuer is checked separately and summarized for follow-up review.',
+      '',
+      '## Monitoring Conditions',
+      '',
+      ...(selectedConditionPrompts.length > 0
+        ? selectedConditionPrompts.map((condition) => `- ${condition}`)
+        : ['- All standard conditions']),
+      '',
+      '## Issuer Updates',
       '',
       body,
     ].join('\n');
