@@ -1324,6 +1324,21 @@ h3 {
   grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
 }
 
+.general-update-panel {
+  align-items: center;
+  background: #f7fbff;
+  border: 1px solid #d7eaf8;
+  border-radius: var(--radius);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 16px;
+}
+
+.general-update-panel h3 {
+  font-size: 18px;
+}
+
 .issuer-browser {
   background: #fbfcfd;
   border: 1px solid var(--color-divider);
@@ -1517,7 +1532,8 @@ h3 {
   .report-workflow-head,
   .report-controls,
   .library-run,
-  .issuer-detail-head {
+  .issuer-detail-head,
+  .general-update-panel {
     align-items: stretch;
     flex-direction: column;
     grid-template-columns: 1fr;

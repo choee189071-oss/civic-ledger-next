@@ -159,7 +159,23 @@ export default function HomePage() {
     setView('reading');
   }
 
-  async function runResearch() {
+  async function runResearch(overrides?: {
+    query?: string;
+    promptMode?: string;
+    customAngle?: string;
+    outputType?: string;
+    topic?: string;
+    source?: string;
+    sort?: string;
+  }) {
+    const runQuery = overrides?.query ?? query;
+    const runPromptMode = overrides?.promptMode ?? promptMode;
+    const runCustomAngle = overrides?.customAngle ?? customAngle;
+    const runOutputType = overrides?.outputType ?? reportTemplate;
+    const runTopic = overrides?.topic ?? topic;
+    const runSource = overrides?.source ?? source;
+    const runSort = overrides?.sort ?? sort;
+
     setIsResearching(true);
     setResearchError(null);
 
@@ -169,16 +185,16 @@ export default function HomePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query,
-            topic,
-            source,
-            promptMode,
-            customAngle,
-            outputType: reportTemplate,
+            query: runQuery,
+            topic: runTopic,
+            source: runSource,
+            promptMode: runPromptMode,
+            customAngle: runCustomAngle,
+            outputType: runOutputType,
             workflowOptions,
           }),
         }),
-        fetch(`/api/search?${new URLSearchParams({ q: query, topic, source, sort }).toString()}`),
+        fetch(`/api/search?${new URLSearchParams({ q: runQuery, topic: runTopic, source: runSource, sort: runSort }).toString()}`),
       ]);
 
       const searchPayload = await searchRes.json().catch(() => ({ items: [] }));
@@ -208,7 +224,7 @@ export default function HomePage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Live research failed.';
       setResearchError(message);
-      await loadSearch();
+      await loadSearch(runQuery, runTopic, runSource, runSort);
     } finally {
       setIsResearching(false);
     }
@@ -416,16 +432,29 @@ export default function HomePage() {
   }
 
   function startIssuerDevelopmentScan(issuer: string, mode: string, angle: string) {
+    const isGeneralCcdUpdate = /CCD_GENERAL_UPDATE/i.test(angle);
+    const nextOutputType = isGeneralCcdUpdate ? 'risk-monitor' : 'research-brief';
+    const nextCustomAngle = `${mode}: ${angle}`;
+
     setQuery(issuer);
     setPromptMode('custom-prompt');
-    setCustomAngle(`${mode}: ${angle}`);
-    setReportTemplate('research-brief');
+    setCustomAngle(nextCustomAngle);
+    setReportTemplate(nextOutputType);
     setTopic('all');
     setSource('all');
     setSort('freshness');
     setGeneratedReport(null);
     setReportError(null);
     setView('search');
+    void runResearch({
+      query: issuer,
+      promptMode: 'custom-prompt',
+      customAngle: nextCustomAngle,
+      outputType: nextOutputType,
+      topic: 'all',
+      source: 'all',
+      sort: 'freshness',
+    });
   }
 
   function openCurrentReading() {

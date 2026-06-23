@@ -168,6 +168,17 @@ function uniqueQueries(queries: string[]) {
 }
 
 function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string) {
+  if (/CCD_GENERAL_UPDATE|ALL_CCD_ISSUERS/i.test(customAngle)) {
+    return uniqueQueries([
+      'California community college district rating action outlook recent developments 2026 2025',
+      'California community college district bond issuance official statement 2026 2025',
+      'California community college district continuing disclosure EMMA MSRB recent',
+      'California community college district board agenda budget enrollment recent developments',
+      'California CCD capital projects facilities bond measure recent',
+      'California community college district accreditation governance litigation labor recent',
+    ]);
+  }
+
   const custom = customAngle ? `${issuer} ${customAngle}` : issuer;
 
   const strategies: Record<PromptMode, string[]> = {

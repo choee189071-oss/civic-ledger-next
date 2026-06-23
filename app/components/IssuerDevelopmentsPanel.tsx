@@ -145,6 +145,19 @@ function matchesIssuer(record: any, issuer: string) {
   return text.includes(issuer.toLowerCase());
 }
 
+function ccdGeneralUpdatePrompt() {
+  return [
+    'CCD_GENERAL_UPDATE',
+    'Task: review every issuer in ALL_CCD_ISSUERS for material recent developments.',
+    'Only include CCDs with credible new developments in the report. Do not force a section for issuers where no credible recent development is found.',
+    'Material developments include rating actions, outlook changes, bond issuance, EMMA/MSRB continuing disclosure, official statements, board actions, adopted or tentative budgets, enrollment changes, state funding items, labor items, capital projects, facilities bonds, litigation, accreditation, or governance issues.',
+    'For each CCD with a development, include: issuer name, development type, date if available, source link, source tier, why it matters for credit/research, and recommended follow-up.',
+    'Add a final section called "No material update found in this scan" listing CCDs that were checked but did not have a material update in the returned evidence.',
+    'Be explicit that this is a live scan and not a full credit opinion.',
+    `ALL_CCD_ISSUERS: ${ccdIssuers.join('; ')}`,
+  ].join('\n');
+}
+
 export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props) {
   const [sectorId, setSectorId] = useState('education-ccd');
   const [query, setQuery] = useState('');
@@ -187,6 +200,28 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
           </button>
         ))}
       </div>
+
+      {sectorId === 'education-ccd' && (
+        <section className="general-update-panel">
+          <div>
+            <p className="eyebrow">Batch Monitor</p>
+            <h3>General CCD Update</h3>
+            <p className="muted small">
+              Run one sector-wide scan across all {ccdIssuers.length} California CCD issuers and generate a report only for issuers with material new developments.
+            </p>
+          </div>
+          <button
+            className="button-primary"
+            onClick={() => onRunIssuerScan(
+              'California Community College Districts',
+              'risk-news-monitoring',
+              ccdGeneralUpdatePrompt()
+            )}
+          >
+            Run General CCD Update
+          </button>
+        </section>
+      )}
 
       <div className="developments-layout">
         <aside className="issuer-browser">
