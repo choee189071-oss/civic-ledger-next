@@ -8,7 +8,8 @@ export function Sidebar({ current, onChange, savedRecords }: Props) {
   const views = [
     { id: 'search', label: 'Research desk', icon: '⌕' },
     { id: 'reading', label: 'Reading room', icon: '□' },
-    { id: 'sources', label: 'Source list', icon: '◇' }
+    { id: 'sources', label: 'Source list', icon: '◇' },
+    { id: 'library', label: 'Research library', icon: '▤' }
   ];
 
   return (

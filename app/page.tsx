@@ -6,6 +6,7 @@ import { SearchPanel } from './components/SearchPanel';
 import { DetailPanel } from './components/DetailPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
+import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -37,6 +38,42 @@ function normalizeRecord(item: any) {
   };
 }
 
+function defaultRunStatus(record: any) {
+  if (record?.workflowStatus) return record.workflowStatus;
+  if (record?.financeFocused && record?.coreFinanceDocumentsFound === false) return 'Needs Sources';
+  return 'Draft';
+}
+
+function readingKey(item: any) {
+  return item?.recordId || item?.id || 'reading-room';
+}
+
+function replaceSection(content: string, sectionTitle: string, replacement: string) {
+  const lines = (content || '').split('\n');
+  const start = lines.findIndex((line) => {
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+    return heading?.[1]?.replace(/\*\*/g, '').trim().toLowerCase() === sectionTitle.toLowerCase();
+  });
+
+  if (start === -1) {
+    return [content, replacement].filter(Boolean).join('\n\n');
+  }
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^#{1,3}\s+/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+
+  return [
+    ...lines.slice(0, start),
+    replacement.trim(),
+    ...lines.slice(end),
+  ].join('\n').trim();
+}
+
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [query, setQuery] = useState('LADWP');
@@ -55,6 +92,11 @@ export default function HomePage() {
   const [generatedReport, setGeneratedReport] = useState<any | null>(null);
   const [reading, setReading] = useState<any | null>(null);
   const [savedRecords, setSavedRecords] = useState<any[]>([]);
+  const [runStatuses, setRunStatuses] = useState<Record<string, string>>({});
+  const [sourceStatuses, setSourceStatuses] = useState<Record<string, string>>({});
+  const [reportVersions, setReportVersions] = useState<Record<string, any[]>>({});
+  const [readingAnnotations, setReadingAnnotations] = useState<Record<string, any[]>>({});
+  const [storageReady, setStorageReady] = useState(false);
   const [isResearching, setIsResearching] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -147,7 +189,10 @@ export default function HomePage() {
       }
 
       const researchPayload = await researchRes.json();
-      const researchRecord = normalizeRecord(researchPayload.record);
+      const researchRecord = {
+        ...normalizeRecord(researchPayload.record),
+        workflowStatus: defaultRunStatus(researchPayload.record),
+      };
       setGeneratedReport(null);
       const nextResults = [
         researchRecord,
@@ -157,6 +202,7 @@ export default function HomePage() {
       setResults(nextResults);
       setSelectedId(researchRecord.id);
       setDetail(researchRecord);
+      setRunStatuses((statuses) => ({ ...statuses, [researchRecord.id]: researchRecord.workflowStatus }));
       setTab('results');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Live research failed.';
@@ -188,9 +234,10 @@ export default function HomePage() {
 
       const report = payload.report;
       setGeneratedReport(report);
-      setDetail((current: any) => current ? { ...current, generatedReport: report } : current);
+      setRunStatuses((statuses) => ({ ...statuses, [detail.id]: 'Ready for Review' }));
+      setDetail((current: any) => current ? { ...current, generatedReport: report, workflowStatus: 'Ready for Review' } : current);
       setResults((items) =>
-        items.map((item) => item.id === detail.id ? { ...item, generatedReport: report } : item)
+        items.map((item) => item.id === detail.id ? { ...item, generatedReport: report, workflowStatus: 'Ready for Review' } : item)
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Report generation failed.';
@@ -210,12 +257,170 @@ export default function HomePage() {
     setReportError(null);
   }
 
+  function updateRunStatus(status: string) {
+    if (!detail) return;
+
+    setRunStatuses((statuses) => ({ ...statuses, [detail.id]: status }));
+    setDetail((current: any) => current ? { ...current, workflowStatus: status } : current);
+    setResults((items) => items.map((item) => item.id === detail.id ? { ...item, workflowStatus: status } : item));
+    setSavedRecords((records) => {
+      const next = records.map((record) => record.id === detail.id ? { ...record, workflowStatus: status } : record);
+      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function updateSourceStatus(key: string, status: string) {
+    if (!key) return;
+    setSourceStatuses((statuses) => ({ ...statuses, [key]: status }));
+  }
+
+  function updateReportContent(content: string) {
+    if (!generatedReport) return;
+
+    const nextReport = { ...generatedReport, content, editedAt: new Date().toISOString() };
+    setGeneratedReport(nextReport);
+    setDetail((current: any) => current ? { ...current, generatedReport: nextReport } : current);
+    setResults((items) => items.map((item) => item.id === detail?.id ? { ...item, generatedReport: nextReport } : item));
+  }
+
+  function saveReportVersion() {
+    if (!detail || !generatedReport) return;
+
+    const version = {
+      id: `version-${Date.now()}`,
+      label: `Version ${(reportVersions[detail.id]?.length ?? 0) + 1} · ${new Date().toLocaleString()}`,
+      content: generatedReport.content,
+      templateLabel: generatedReport.templateLabel,
+      savedAt: new Date().toISOString(),
+    };
+
+    setReportVersions((versions) => ({
+      ...versions,
+      [detail.id]: [version, ...(versions[detail.id] ?? [])].slice(0, 12),
+    }));
+
+    setSavedRecords((records) => {
+      const next = records.map((record) => record.id === detail.id
+        ? { ...record, reportVersions: [version, ...(record.reportVersions ?? [])].slice(0, 12) }
+        : record);
+      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      return next;
+    });
+  }
+
+  async function regenerateReportSection(sectionTitle: string, currentSection: string) {
+    if (!detail || !generatedReport) return;
+
+    saveReportVersion();
+    setIsGeneratingReport(true);
+    setReportError(null);
+
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          record: detail,
+          template: reportTemplate,
+          sectionTitle,
+          currentSection,
+          workflowOptions,
+        }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || 'Section regeneration failed.');
+      }
+
+      const nextContent = replaceSection(generatedReport.content, sectionTitle, payload.report.content);
+      updateReportContent(nextContent);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Section regeneration failed.';
+      setReportError(message);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
+  function updateReadingContent(content: string) {
+    setReading((current: any) => current ? { ...current, body: [content], editedAt: new Date().toISOString() } : current);
+
+    if (generatedReport && reading?.id === generatedReport.id) {
+      updateReportContent(content);
+    }
+  }
+
+  function addReadingAnnotation(annotation: any) {
+    if (!reading) return;
+    const key = readingKey(reading);
+    setReadingAnnotations((items) => ({
+      ...items,
+      [key]: [annotation, ...(items[key] ?? [])],
+    }));
+    setSavedRecords((records) => {
+      const next = records.map((record) => record.id === key
+        ? { ...record, annotations: [annotation, ...(record.annotations ?? [])] }
+        : record);
+      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function deleteReadingAnnotation(annotationId: string) {
+    if (!reading) return;
+    const key = readingKey(reading);
+    setReadingAnnotations((items) => ({
+      ...items,
+      [key]: (items[key] ?? []).filter((annotation) => annotation.id !== annotationId),
+    }));
+    setSavedRecords((records) => {
+      const next = records.map((record) => record.id === key
+        ? { ...record, annotations: (record.annotations ?? []).filter((annotation: any) => annotation.id !== annotationId) }
+        : record);
+      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function openLibraryRecord(record: any) {
+    const normalized = normalizeRecord(record);
+    setDetail(normalized);
+    setSelectedId(normalized.id);
+    setGeneratedReport(record.generatedReport ?? null);
+    setRunStatuses((statuses) => ({ ...statuses, [normalized.id]: record.workflowStatus ?? defaultRunStatus(record) }));
+    if (record.reportVersions?.length) {
+      setReportVersions((versions) => ({ ...versions, [normalized.id]: record.reportVersions }));
+    }
+    setView('search');
+  }
+
+  function openLibraryReading(record: any) {
+    const report = record.generatedReport;
+    const key = record.id;
+
+    if (record.annotations?.length) {
+      setReadingAnnotations((items) => ({ ...items, [key]: record.annotations }));
+    }
+
+    setReading({
+      id: report?.id || record.id,
+      recordId: key,
+      title: report?.title || `Reading: ${record.title}`,
+      body: [report?.content || record.snippet || record.summary || ''],
+    });
+    setView('reading');
+  }
+
   function openCurrentReading() {
     if (!detail) return;
 
     if (generatedReport) {
       setReading({
         id: generatedReport.id,
+        recordId: detail.id,
         title: generatedReport.title,
         body: [generatedReport.content],
       });
@@ -226,6 +431,7 @@ export default function HomePage() {
     if (detail.kind === 'research') {
       setReading({
         id: detail.id,
+        recordId: detail.id,
         title: `Reading: ${detail.title}`,
         body: [
           detail.summary,
@@ -257,6 +463,9 @@ export default function HomePage() {
       const nextRecord = {
         ...detail,
         generatedReport,
+        workflowStatus: runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail),
+        reportVersions: reportVersions[detail.id] ?? [],
+        annotations: readingAnnotations[detail.id] ?? [],
         savedAt: new Date().toISOString()
       };
       const next = [
@@ -274,9 +483,46 @@ export default function HomePage() {
     if (stored) {
       setSavedRecords(JSON.parse(stored));
     }
+    const storedRunStatuses = window.localStorage.getItem('civic-ledger-run-statuses');
+    if (storedRunStatuses) {
+      setRunStatuses(JSON.parse(storedRunStatuses));
+    }
+    const storedSourceStatuses = window.localStorage.getItem('civic-ledger-source-statuses');
+    if (storedSourceStatuses) {
+      setSourceStatuses(JSON.parse(storedSourceStatuses));
+    }
+    const storedVersions = window.localStorage.getItem('civic-ledger-report-versions');
+    if (storedVersions) {
+      setReportVersions(JSON.parse(storedVersions));
+    }
+    const storedAnnotations = window.localStorage.getItem('civic-ledger-reading-annotations');
+    if (storedAnnotations) {
+      setReadingAnnotations(JSON.parse(storedAnnotations));
+    }
+    setStorageReady(true);
     loadSources();
     loadSearch();
   }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-run-statuses', JSON.stringify(runStatuses));
+  }, [runStatuses, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-source-statuses', JSON.stringify(sourceStatuses));
+  }, [sourceStatuses, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-report-versions', JSON.stringify(reportVersions));
+  }, [reportVersions, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-reading-annotations', JSON.stringify(readingAnnotations));
+  }, [readingAnnotations, storageReady]);
 
   return (
     <div className="app-shell">
@@ -327,9 +573,15 @@ export default function HomePage() {
               detail={detail}
               reportTemplate={reportTemplate}
               generatedReport={generatedReport}
+              reportVersions={detail ? reportVersions[detail.id] ?? [] : []}
+              runStatus={detail ? runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail) : 'Draft'}
               isGeneratingReport={isGeneratingReport}
               reportError={reportError}
               onGenerateReport={generateReport}
+              onRegenerateSection={regenerateReportSection}
+              onUpdateReportContent={updateReportContent}
+              onSaveReportVersion={saveReportVersion}
+              onRunStatusChange={updateRunStatus}
               onOpenReading={openCurrentReading}
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
@@ -337,8 +589,31 @@ export default function HomePage() {
           </section>
         )}
 
-        {view === 'reading' && <ReadingPanel item={reading} />}
-        {view === 'sources' && <SourcesPanel items={sources} detail={detail} savedRecords={savedRecords} />}
+        {view === 'reading' && (
+          <ReadingPanel
+            item={reading}
+            annotations={readingAnnotations[readingKey(reading)] ?? []}
+            onUpdateContent={updateReadingContent}
+            onAddAnnotation={addReadingAnnotation}
+            onDeleteAnnotation={deleteReadingAnnotation}
+          />
+        )}
+        {view === 'sources' && (
+          <SourcesPanel
+            items={sources}
+            detail={detail}
+            savedRecords={savedRecords}
+            sourceStatuses={sourceStatuses}
+            onSourceStatusChange={updateSourceStatus}
+          />
+        )}
+        {view === 'library' && (
+          <ResearchLibraryPanel
+            records={savedRecords}
+            onOpenRecord={openLibraryRecord}
+            onOpenReading={openLibraryReading}
+          />
+        )}
       </main>
     </div>
   );

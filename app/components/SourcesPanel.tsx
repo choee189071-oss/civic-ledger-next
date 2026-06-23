@@ -2,7 +2,11 @@ type Props = {
   items: any[];
   detail: any;
   savedRecords: any[];
+  sourceStatuses: Record<string, string>;
+  onSourceStatusChange: (key: string, status: string) => void;
 };
+
+const sourceStatusOptions = ['Used in Report', 'Candidate', 'Missing', 'Rejected'];
 
 function sourceLabel(url: string) {
   try {
@@ -24,6 +28,10 @@ function uniqueByUrl(items: any[]) {
   }
 
   return next;
+}
+
+function sourceKey(item: any) {
+  return (item.url || item.source_url || item.title || item.document || '').toLowerCase();
 }
 
 function currentRunSources(detail: any) {
@@ -59,10 +67,20 @@ function currentRunSources(detail: any) {
     status: 'Referenced',
   }));
 
-  return uniqueByUrl([...inventory, ...live, ...citations]);
+  const missing = (detail.evidencePackage?.missing_items ?? []).map((item: string) => ({
+    title: item,
+    url: undefined,
+    sourceTier: 'Gap',
+    documentType: 'Missing information',
+    date: '',
+    notes: 'Required before finalizing the research package.',
+    status: 'Missing',
+  }));
+
+  return uniqueByUrl([...inventory, ...live, ...citations, ...missing]);
 }
 
-export function SourcesPanel({ items, detail, savedRecords }: Props) {
+export function SourcesPanel({ items, detail, savedRecords, sourceStatuses, onSourceStatusChange }: Props) {
   const runSources = currentRunSources(detail);
 
   return (
@@ -97,7 +115,6 @@ export function SourcesPanel({ items, detail, savedRecords }: Props) {
                       <span>{source.sourceTier || 'Source'}</span>
                       <span>{source.documentType || 'Document'}</span>
                       {source.date && <span>{source.date}</span>}
-                      {source.status && <span>{source.status}</span>}
                     </div>
                     {source.url ? (
                       <a href={source.url} target="_blank" rel="noreferrer">
@@ -108,11 +125,21 @@ export function SourcesPanel({ items, detail, savedRecords }: Props) {
                     )}
                     {source.notes && <p className="muted small">{source.notes}</p>}
                   </div>
-                  {source.url && (
-                    <a className="button-secondary source-open-button" href={source.url} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
-                  )}
+                  <div className="source-actions">
+                    <select
+                      value={sourceStatuses[sourceKey(source)] ?? (source.status === 'Missing' ? 'Missing' : source.status === 'Referenced' ? 'Used in Report' : 'Candidate')}
+                      onChange={(event) => onSourceStatusChange(sourceKey(source), event.target.value)}
+                    >
+                      {sourceStatusOptions.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    {source.url && (
+                      <a className="button-secondary source-open-button" href={source.url} target="_blank" rel="noreferrer">
+                        Open
+                      </a>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>

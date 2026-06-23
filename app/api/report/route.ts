@@ -265,6 +265,18 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
   ].join('\n');
 }
 
+function sectionInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate], templateKey: ReportTemplate, sectionTitle: string) {
+  return [
+    reportInstructions(template, templateKey),
+    '',
+    'SECTION REGENERATION MODE:',
+    `Regenerate only the section titled "${sectionTitle}".`,
+    'Return only that section in markdown, starting with the section heading.',
+    'Preserve useful detail from the current section when it is still supported by the research package.',
+    'Do not rewrite unrelated sections.',
+  ].join('\n');
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -281,6 +293,8 @@ export async function POST(request: Request) {
   const record = body.record;
   const templateKey = normalizeTemplate(body.template);
   const template = REPORT_TEMPLATES[templateKey];
+  const sectionTitle = typeof body.sectionTitle === 'string' ? body.sectionTitle.trim() : '';
+  const currentSection = typeof body.currentSection === 'string' ? body.currentSection.trim() : '';
 
   if (!record) {
     return NextResponse.json({ error: 'Research record is required.' }, { status: 400 });
@@ -298,13 +312,27 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       model,
-      instructions: reportInstructions(template, templateKey),
-      input: [
-        'Generate the selected report template from this research package.',
-        `Selected template: ${template.label}`,
-        '',
-        packageJson,
-      ].join('\n'),
+      instructions: sectionTitle
+        ? sectionInstructions(template, templateKey, sectionTitle)
+        : reportInstructions(template, templateKey),
+      input: sectionTitle
+        ? [
+          'Regenerate the selected report section from this research package.',
+          `Selected template: ${template.label}`,
+          `Section title: ${sectionTitle}`,
+          '',
+          'Current section text:',
+          currentSection || 'No current section text supplied.',
+          '',
+          'Research package:',
+          packageJson,
+        ].join('\n')
+        : [
+          'Generate the selected report template from this research package.',
+          `Selected template: ${template.label}`,
+          '',
+          packageJson,
+        ].join('\n'),
       reasoning: {
         effort: 'medium',
       },
@@ -332,11 +360,14 @@ export async function POST(request: Request) {
       id: `report-${Date.now()}`,
       template: templateKey,
       templateLabel: template.label,
-      title: `${template.label}: ${record.title ?? 'Research Report'}`,
+      title: sectionTitle
+        ? `${template.label}: ${sectionTitle}`
+        : `${template.label}: ${record.title ?? 'Research Report'}`,
       content: content || 'No report text returned.',
       generatedAt: new Date().toISOString(),
       model: payload.model || model,
       usage: payload.usage ?? null,
+      sectionTitle: sectionTitle || null,
     },
   });
 }

@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from 'react';
+
 type Result = {
   id: string;
   title: string;
@@ -70,6 +74,7 @@ const workflowOptionLabels = [
 ];
 
 export function SearchPanel(props: Props) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const citations = [
     ...new Set(
       props.items.flatMap((item) =>
@@ -142,49 +147,62 @@ export function SearchPanel(props: Props) {
           </select>
         </label>
 
-        <div className="scope-toggle-grid" aria-label="System scope">
-          {workflowOptionLabels.map(([key, label]) => (
-            <label key={key} className="scope-toggle">
-              <input
-                type="checkbox"
-                checked={props.workflowOptions[key] ?? true}
-                onChange={(e) => props.onWorkflowOption(key, e.target.checked)}
-              />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+        <button
+          className="advanced-toggle"
+          onClick={() => setAdvancedOpen((open) => !open)}
+          type="button"
+        >
+          <span>Advanced settings</span>
+          <strong>{advancedOpen ? 'Hide' : 'Show'}</strong>
+        </button>
 
-      <div className="filters">
-        <label>
-          Topic
-          <select value={props.topic} onChange={(e) => props.onTopic(e.target.value)}>
-          <option value="all">All topics</option>
-          <option value="Budget">Budget</option>
-          <option value="Expenditures">Expenditures</option>
-          <option value="Disclosure">Disclosure</option>
-          <option value="Bonds">Bonds</option>
-          </select>
-        </label>
-        <label>
-          Source
-          <select value={props.source} onChange={(e) => props.onSource(e.target.value)}>
-          <option value="all">All sources</option>
-          <option value="Open FI$Cal">Open FI$Cal</option>
-          <option value="California Budget">California Budget</option>
-          <option value="CDIAC">CDIAC</option>
-          <option value="Debt Line">Debt Line</option>
-          </select>
-        </label>
-        <label>
-          Sort
-          <select value={props.sort} onChange={(e) => props.onSort(e.target.value)}>
-          <option value="score">Sort by relevance</option>
-          <option value="freshness">Sort by freshness</option>
-          <option value="title">Sort by title</option>
-          </select>
-        </label>
+        {advancedOpen && (
+          <div className="advanced-panel">
+            <div className="scope-toggle-grid" aria-label="System scope">
+              {workflowOptionLabels.map(([key, label]) => (
+                <label key={key} className="scope-toggle">
+                  <input
+                    type="checkbox"
+                    checked={props.workflowOptions[key] ?? true}
+                    onChange={(e) => props.onWorkflowOption(key, e.target.checked)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="filters">
+              <label>
+                Topic
+                <select value={props.topic} onChange={(e) => props.onTopic(e.target.value)}>
+                <option value="all">All topics</option>
+                <option value="Budget">Budget</option>
+                <option value="Expenditures">Expenditures</option>
+                <option value="Disclosure">Disclosure</option>
+                <option value="Bonds">Bonds</option>
+                </select>
+              </label>
+              <label>
+                Source
+                <select value={props.source} onChange={(e) => props.onSource(e.target.value)}>
+                <option value="all">All sources</option>
+                <option value="Open FI$Cal">Open FI$Cal</option>
+                <option value="California Budget">California Budget</option>
+                <option value="CDIAC">CDIAC</option>
+                <option value="Debt Line">Debt Line</option>
+                </select>
+              </label>
+              <label>
+                Sort
+                <select value={props.sort} onChange={(e) => props.onSort(e.target.value)}>
+                <option value="score">Sort by relevance</option>
+                <option value="freshness">Sort by freshness</option>
+                <option value="title">Sort by title</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="segmented-control">

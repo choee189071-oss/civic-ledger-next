@@ -7,9 +7,15 @@ type Props = {
   detail: any;
   reportTemplate: string;
   generatedReport: any | null;
+  reportVersions: any[];
+  runStatus: string;
   isGeneratingReport: boolean;
   reportError: string | null;
   onGenerateReport: () => void;
+  onRegenerateSection: (sectionTitle: string, currentSection: string) => void;
+  onUpdateReportContent: (content: string) => void;
+  onSaveReportVersion: () => void;
+  onRunStatusChange: (status: string) => void;
   onOpenReading: () => void;
   onSave: () => void;
   isSaved: boolean;
@@ -27,10 +33,12 @@ const reportTemplates = [
 ];
 
 const workflowTabs = [
-  ['discovery', 'Discovery'],
-  ['report', 'Generate'],
-  ['export', 'Export'],
+  ['discovery', 'Research Package'],
+  ['report', 'Draft Report'],
+  ['export', 'Deliverable'],
 ];
+
+const runStatuses = ['Draft', 'Needs Sources', 'Ready for Review', 'Finalized'];
 
 function citationLabel(citation: string) {
   try {
@@ -106,19 +114,60 @@ function templateLabel(value: string) {
   return reportTemplates.find(([id]) => id === value)?.[1] ?? value;
 }
 
+function reportSections(content: string) {
+  const lines = (content || '').split('\n');
+  const sections: Array<{ title: string; content: string }> = [];
+  let currentTitle = '';
+  let currentLines: string[] = [];
+
+  function flush() {
+    if (currentTitle || currentLines.join('').trim()) {
+      sections.push({
+        title: currentTitle || 'Opening',
+        content: currentLines.join('\n').trim(),
+      });
+    }
+  }
+
+  for (const line of lines) {
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+
+    if (heading) {
+      flush();
+      currentTitle = heading[1].replace(/\*\*/g, '').trim();
+      currentLines = [line];
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  flush();
+
+  return sections.filter((section) => section.content);
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
   generatedReport,
+  reportVersions,
+  runStatus,
   isGeneratingReport,
   reportError,
   onGenerateReport,
+  onRegenerateSection,
+  onUpdateReportContent,
+  onSaveReportVersion,
+  onRunStatusChange,
   onOpenReading,
   onSave,
   isSaved,
 }: Props) {
   const [activeTab, setActiveTab] = useState('discovery');
   const [copyStatus, setCopyStatus] = useState('');
+  const [isEditingReport, setIsEditingReport] = useState(false);
+  const [compareVersionId, setCompareVersionId] = useState('');
 
   if (!detail) {
     return (
@@ -200,7 +249,14 @@ export function DetailPanel({
           <p className="eyebrow">Workflow</p>
           <h2>{detail.title}</h2>
         </div>
-        <span className="status-pill ready">4-step run</span>
+        <label className="status-select">
+          <span>Status</span>
+          <select value={runStatus} onChange={(event) => onRunStatusChange(event.target.value)}>
+            {runStatuses.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="answer-summary">
@@ -366,9 +422,88 @@ export function DetailPanel({
                 <span>{generatedReport.templateLabel}</span>
                 <span>{generatedReport.model}</span>
                 <span>{new Date(generatedReport.generatedAt).toLocaleString()}</span>
+                <span>{reportVersions.length} versions</span>
               </div>
               <h3>{generatedReport.title}</h3>
-              <FormattedReport content={generatedReport.content} />
+
+              <div className="report-toolbar">
+                <button className="button-secondary" onClick={() => setIsEditingReport((editing) => !editing)}>
+                  {isEditingReport ? 'Preview Report' : 'Edit Report'}
+                </button>
+                <button className="button-secondary" onClick={onSaveReportVersion}>
+                  Save Version
+                </button>
+                <button className="button-secondary" onClick={onOpenReading}>
+                  Open in Reading Room
+                </button>
+              </div>
+
+              {isEditingReport ? (
+                <textarea
+                  className="report-editor"
+                  value={generatedReport.content}
+                  onChange={(event) => onUpdateReportContent(event.target.value)}
+                />
+              ) : (
+                <FormattedReport content={generatedReport.content} />
+              )}
+
+              <section className="section-regeneration">
+                <div className="section-heading">
+                  <div>
+                    <h3>Section controls</h3>
+                    <p className="muted small">Regenerate one section without replacing the full report.</p>
+                  </div>
+                </div>
+                <div className="section-list">
+                  {reportSections(generatedReport.content).map((section) => (
+                    <div key={section.title} className="section-row">
+                      <span>{section.title}</span>
+                      <button
+                        className="button-secondary"
+                        onClick={() => onRegenerateSection(section.title, section.content)}
+                        disabled={isGeneratingReport}
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {reportVersions.length > 0 && (
+                <section className="version-compare">
+                  <div className="section-heading">
+                    <div>
+                      <h3>Version history</h3>
+                      <p className="muted small">Save report drafts before larger rewrites or section regeneration.</p>
+                    </div>
+                    <select value={compareVersionId} onChange={(event) => setCompareVersionId(event.target.value)}>
+                      <option value="">Compare with...</option>
+                      {reportVersions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {compareVersionId && (
+                    <div className="compare-grid">
+                      <div>
+                        <h4>Saved version</h4>
+                        <div className="compare-box">
+                          {reportVersions.find((version) => version.id === compareVersionId)?.content}
+                        </div>
+                      </div>
+                      <div>
+                        <h4>Current draft</h4>
+                        <div className="compare-box">{generatedReport.content}</div>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
             </article>
           ) : (
             <div className="empty-workflow-state">

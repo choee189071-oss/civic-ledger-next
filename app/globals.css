@@ -368,6 +368,30 @@ h3 {
   color: var(--color-text);
 }
 
+.status-select {
+  color: var(--color-muted);
+  display: grid;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 5px;
+  min-width: 172px;
+  text-transform: uppercase;
+}
+
+.status-select select,
+.advanced-panel select,
+.source-actions select,
+.version-compare select,
+.annotation-composer select {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
 .prompt-builder,
 .filters {
   display: grid;
@@ -441,6 +465,37 @@ h3 {
   height: 14px;
   margin: 0;
   width: 14px;
+}
+
+.advanced-toggle {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  display: flex;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 11px;
+  text-align: left;
+}
+
+.advanced-toggle span {
+  font-weight: 750;
+}
+
+.advanced-toggle strong {
+  color: var(--color-primary-dark);
+  font-size: 12px;
+}
+
+.advanced-panel {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
 }
 
 .segmented-control {
@@ -697,6 +752,105 @@ h3 {
   padding: 18px;
 }
 
+.report-toolbar,
+.reading-toolbar,
+.library-actions,
+.source-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reading-toolbar {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.reading-toolbar button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 760;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.reading-toolbar button.active {
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  color: var(--color-text);
+}
+
+.report-editor,
+.reading-editor {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  line-height: 1.65;
+  min-height: 460px;
+  padding: 14px;
+  resize: vertical;
+  width: 100%;
+}
+
+.section-regeneration,
+.version-compare {
+  border-top: 1px solid var(--color-divider);
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.section-list {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.section-row {
+  align-items: center;
+  border-top: 1px solid var(--color-divider);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 11px;
+}
+
+.section-row:first-child {
+  border-top: 0;
+}
+
+.section-row span {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.compare-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compare-box {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
 .report-body {
   color: var(--color-text);
   font-size: 13px;
@@ -842,7 +996,7 @@ h3 {
   border-top: 1px solid var(--color-divider);
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
   padding: 14px;
 }
 
@@ -861,6 +1015,10 @@ h3 {
 
 .source-open-button {
   min-width: 78px;
+}
+
+.source-actions {
+  justify-content: flex-end;
 }
 
 .freshness {
@@ -885,6 +1043,80 @@ h3 {
   max-width: 980px;
   padding-top: 24px;
   width: 100%;
+}
+
+.reading-workspace {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+}
+
+.reading-document {
+  min-width: 0;
+}
+
+.annotation-panel {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+  padding: 14px;
+  position: sticky;
+  top: 18px;
+}
+
+.annotation-panel.active {
+  border-color: #cfe4f5;
+  box-shadow: 0 0 0 2px #eef6fc;
+}
+
+.annotation-composer {
+  border-bottom: 1px solid var(--color-divider);
+  display: grid;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+
+.annotation-composer label {
+  color: var(--color-muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.annotation-composer input,
+.annotation-composer textarea {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  line-height: 1.5;
+  padding: 10px;
+}
+
+.annotation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.annotation-card {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.annotation-card p {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .reading-body p {
@@ -1016,6 +1248,44 @@ h3 {
   text-align: center;
 }
 
+.library-page {
+  margin: 0 auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.library-issuer {
+  border-top: 1px solid var(--color-divider);
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.library-run-list {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.library-run {
+  align-items: center;
+  background: #ffffff;
+  border-top: 1px solid var(--color-divider);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.library-run:first-child {
+  border-top: 0;
+}
+
+.library-run h3 {
+  font-size: 15px;
+  margin-top: 8px;
+}
+
 @media (max-width: 1180px) {
   .workspace-grid {
     grid-template-columns: minmax(280px, 0.95fr) minmax(430px, 1.3fr);
@@ -1039,8 +1309,14 @@ h3 {
   }
 
   .workspace-grid,
-  .source-grid {
+  .source-grid,
+  .reading-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .annotation-panel {
+    max-height: none;
+    position: static;
   }
 
   .query-panel,
@@ -1073,19 +1349,23 @@ h3 {
 
   .workflow-tabs,
   .key-value-grid,
-  .export-grid {
+  .export-grid,
+  .compare-grid {
     grid-template-columns: 1fr;
   }
 
   .report-workflow-head,
-  .report-controls {
+  .report-controls,
+  .library-run {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .mini-table-row,
   .document-row,
-  .source-list-row {
+  .source-list-row,
+  .section-row {
     align-items: start;
     grid-template-columns: 1fr;
   }
