@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { buildRecencyScope, noRecentInfoGuide, recencyPrompt } from '../../../../lib/research-recency';
 
 export const runtime = 'nodejs';
 
@@ -39,15 +40,16 @@ export async function POST(request: Request) {
 
   const model = process.env.PUBFIN_MODEL || 'sonar-pro';
   const timestamp = new Date().toISOString();
+  const recencyScope = buildRecencyScope(new Date(timestamp));
 
   const system = [
     'You are Civic Ledger, a municipal finance monitoring analyst.',
     'Check current public web evidence for one California community college district issuer.',
-    'Focus on material recent developments from 2025-2026 unless an older item is clearly still relevant.',
+    recencyPrompt(recencyScope),
     'Material developments include rating actions, outlook changes, bond issuance, official statements, EMMA/MSRB continuing disclosure, board actions, budgets, enrollment, state funding, labor, capital projects, facilities bonds, litigation, accreditation, governance, or audit issues.',
     'Pay special attention to board meeting minutes and board packets. Bond authorizations, bond resolutions, municipal advisor engagements, bond counsel engagements, RFP approvals, and RFP award results are often found in board materials before news coverage appears.',
     'Return exactly one concise issuer update. Use 2-3 sentences only.',
-    'If no material issuer-specific development is found, say that clearly in 1-2 sentences and mention what source types were checked.',
+    noRecentInfoGuide(),
     'Do not invent developments. Include at least one source name or URL when a development is found.',
     'This is a monitoring update, not a credit opinion.',
   ].join('\n');
@@ -58,18 +60,22 @@ export async function POST(request: Request) {
     '',
     'Search task:',
     `Find whether ${issuer} has any recent material development for credit/research monitoring.`,
+    `First search the preferred 3-month window (${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}). If none, expand only to the 6-month fallback (${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}).`,
     'Prioritize rating agencies, EMMA/MSRB, official statements, district board/budget pages, official district news, CCCCO materials, and credible municipal market sources.',
     conditions.length > 0 ? `Selected monitoring conditions: ${conditions.join(' | ')}` : 'Selected monitoring conditions: all standard recent-development conditions.',
     '',
     'Required board-material checks when available:',
-    `- ${issuer} board meeting minutes bond authorization bond resolution`,
-    `- ${issuer} board agenda municipal advisor bond counsel`,
-    `- ${issuer} RFP bond counsel municipal advisor underwriter financial advisor results`,
-    `- ${issuer} board packet official statement bonds continuing disclosure`,
+    `- ${issuer} board meeting minutes bond authorization bond resolution since ${recencyScope.preferredStartDate}`,
+    `- ${issuer} board agenda municipal advisor bond counsel since ${recencyScope.preferredStartDate}`,
+    `- ${issuer} RFP bond counsel municipal advisor underwriter financial advisor results since ${recencyScope.preferredStartDate}`,
+    `- ${issuer} board packet official statement bonds continuing disclosure since ${recencyScope.preferredStartDate}`,
+    `- fallback: ${issuer} board meeting minutes bond authorization RFP EMMA rating action since ${recencyScope.fallbackStartDate}`,
     '',
     'Output format:',
     `### ${issuer}`,
-    'Status: Development found / No material update found / Needs manual verification',
+    'Status: Development found / No recent change found / Stale source only / Insufficient public evidence / Needs manual verification',
+    'Recency: Preferred 3-month evidence / 6-month fallback evidence / Older context only / Undated source',
+    'Reason: Briefly explain why this status was selected, especially when no fresh item was found.',
     'Update: 2-3 sentences with date, source, and why it matters.',
     'Source: source name and URL if available.',
   ].join('\n');
@@ -104,6 +110,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     issuer,
     timestamp,
+    recencyScope,
     update: responseText(payload),
     citations: payload.citations ?? [],
     searchResults: payload.search_results ?? [],

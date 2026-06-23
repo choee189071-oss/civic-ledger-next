@@ -111,6 +111,9 @@ export function SearchPanel(props: Props) {
           {props.isResearching ? '…' : '⌕'}
         </button>
       </div>
+      <p className="muted small">
+        Recency policy: prefer developments from the last 3 months; expand to 6 months only when no fresh issuer-specific evidence is found.
+      </p>
 
       {props.researchError && (
         <div className="error-banner">{props.researchError}</div>

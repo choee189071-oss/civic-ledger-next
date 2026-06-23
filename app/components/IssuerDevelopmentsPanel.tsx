@@ -13,6 +13,11 @@ type CcdUpdate = {
   citations?: string[];
   error?: string;
   timestamp?: string;
+  recencyScope?: {
+    asOfDate: string;
+    preferredStartDate: string;
+    fallbackStartDate: string;
+  };
 };
 
 const ccdIssuers = [
@@ -226,7 +231,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     if (!res.ok) {
       return {
         issuer,
-        update: `### ${issuer}\nStatus: Needs manual verification\nUpdate: The automated scan failed for this issuer. Re-run this issuer individually or verify manually.\nSource: ${payload.error || 'Scanner error'}`,
+        update: `### ${issuer}\nStatus: Needs manual verification\nRecency: Undated source\nReason: The automated scan failed, so the platform could not verify whether there was a 3-month or 6-month issuer-specific development.\nUpdate: Re-run this issuer individually or verify manually against board packets, EMMA/MSRB, rating pages, and official issuer materials.\nSource: ${payload.error || 'Scanner error'}`,
         error: payload.error || 'Scan failed.',
       };
     }
@@ -262,7 +267,11 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     const date = new Date().toISOString();
     const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
     const foundCount = ccdUpdates.filter((item) => /Status:\s*Development found/i.test(item.update)).length;
+    const noRecentCount = ccdUpdates.filter((item) => /Status:\s*No recent change found/i.test(item.update)).length;
+    const staleCount = ccdUpdates.filter((item) => /Status:\s*Stale source only/i.test(item.update)).length;
+    const insufficientCount = ccdUpdates.filter((item) => /Status:\s*Insufficient public evidence/i.test(item.update)).length;
     const verificationCount = ccdUpdates.filter((item) => /Status:\s*Needs manual verification/i.test(item.update)).length;
+    const scope = ccdUpdates.find((item) => item.recencyScope)?.recencyScope;
     const body = ccdUpdates.length > 0
       ? ccdUpdates.map((item) => item.update).join('\n\n---\n\n')
       : 'No issuer updates generated yet.';
@@ -275,8 +284,13 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
       '',
       '## Executive Summary',
       '',
+      scope ? `- Preferred recency window: ${scope.preferredStartDate} to ${scope.asOfDate}.` : '- Preferred recency window: last 3 months; fallback: last 6 months.',
+      scope ? `- Fallback recency window: ${scope.fallbackStartDate} to ${scope.asOfDate}.` : '- Older items should be treated as background unless clearly material and still relevant.',
       `- ${foundCount} issuers had a potentially material recent development surfaced by the scan.`,
-      `- ${verificationCount} issuers require manual verification before the item should be treated as issuer-specific.`,
+      `- ${noRecentCount} issuers had no recent change found in the preferred/fallback windows based on returned sources.`,
+      `- ${staleCount} issuers only surfaced older context outside the fallback window.`,
+      `- ${insufficientCount} issuers had insufficient public evidence from the search results.`,
+      `- ${verificationCount} issuers require manual verification before the item should be treated as issuer-specific or current.`,
       `- ${Math.max(issuersToScan.length - ccdUpdates.length, 0)} selected issuers have not been scanned in this run.`,
       '- This is a monitoring scan, not a credit opinion. Each issuer is checked separately and summarized for follow-up review.',
       '',
@@ -391,7 +405,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
               <p className="eyebrow">Batch Monitor</p>
               <h3>General CCD Update</h3>
               <p className="muted small">
-                Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately and summarized in 2-3 sentences.
+                Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately with a 3-month preferred window and 6-month fallback.
               </p>
             </div>
             <button
@@ -425,7 +439,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 <div className="section-heading">
                   <div>
                     <h3>Monitoring conditions</h3>
-                    <p className="muted small">These are included in every issuer-specific search prompt.</p>
+                    <p className="muted small">These are included in every issuer-specific search prompt, with fresh items preferred over older background.</p>
                   </div>
                   <span className="status-pill">{selectedConditions.length} selected</span>
                 </div>
@@ -544,7 +558,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 <div>
                   <p className="eyebrow">{sector.label}</p>
                   <h2>{selectedIssuer}</h2>
-                  <p className="muted">Recent development workspace for reports, news, disclosure filings, and credit watch items.</p>
+                  <p className="muted">Recent development workspace for reports, news, disclosure filings, and credit watch items. Searches prefer the last 3 months and use a 6-month fallback if needed.</p>
                 </div>
                 <button
                   className="button-primary"

@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+import {
+  buildRecencyScope,
+  noRecentInfoGuide,
+  recencyPrompt,
+  recencySearchSuffix,
+  sourceRecencyLabel,
+  type RecencyScope,
+} from '../../../lib/research-recency';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +24,7 @@ type SonarSearchResult = {
   documentType?: string;
   status?: string;
   notes?: string;
+  recencyWindow?: string;
 };
 
 type SonarResponse = {
@@ -110,7 +119,8 @@ function sourceFacts(searchResults: SonarSearchResult[]) {
       const date = result.date || result.last_updated;
       const snippet = result.snippet ? ` — ${result.snippet}` : '';
       const tier = result.sourceTier ? `${result.sourceTier}: ` : '';
-      return `${tier}${label}${date ? ` (${date})` : ''}${snippet}`;
+      const recency = result.recencyWindow ? ` [${result.recencyWindow}]` : '';
+      return `${tier}${label}${date ? ` (${date})` : ''}${recency}${snippet}`;
     });
 }
 
@@ -167,16 +177,20 @@ function uniqueQueries(queries: string[]) {
   return next.slice(0, 6);
 }
 
-function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string) {
+function withRecency(query: string, scope: RecencyScope) {
+  return `${query} ${recencySearchSuffix(scope)}`;
+}
+
+function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string, recencyScope: RecencyScope) {
   if (/CCD_GENERAL_UPDATE|ALL_CCD_ISSUERS/i.test(customAngle)) {
     return uniqueQueries([
-      'California community college district rating action outlook recent developments 2026 2025',
-      'California community college district bond issuance official statement 2026 2025',
-      'California community college district continuing disclosure EMMA MSRB recent',
+      'California community college district rating action outlook recent developments',
+      'California community college district bond issuance official statement',
+      'California community college district continuing disclosure EMMA MSRB',
       'California community college district board agenda budget enrollment recent developments',
-      'California CCD capital projects facilities bond measure recent',
-      'California community college district accreditation governance litigation labor recent',
-    ]);
+      'California CCD capital projects facilities bond measure',
+      'California community college district accreditation governance litigation labor',
+    ].map((query) => withRecency(query, recencyScope)));
   }
 
   const custom = customAngle ? `${issuer} ${customAngle}` : issuer;
@@ -245,7 +259,7 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
     ],
   };
 
-  return uniqueQueries(strategies[promptMode]);
+  return uniqueQueries(strategies[promptMode].map((query) => withRecency(query, recencyScope)));
 }
 
 function documentTypeFor(result: SonarSearchResult) {
@@ -359,9 +373,10 @@ function classifySourceTier(result: SonarSearchResult) {
   };
 }
 
-function classifyResults(results: SonarSearchResult[], financeFocused: boolean) {
+function classifyResults(results: SonarSearchResult[], financeFocused: boolean, recencyScope: RecencyScope) {
   const classified = results.map((result) => {
     const tier = classifySourceTier(result);
+    const recencyWindow = sourceRecencyLabel(result, recencyScope);
 
     return {
       ...result,
@@ -370,7 +385,8 @@ function classifyResults(results: SonarSearchResult[], financeFocused: boolean) 
       sourceTierName: tier.name,
       documentType: tier.documentType,
       status: 'Candidate',
-      notes: tier.notes,
+      recencyWindow,
+      notes: `${tier.notes} Recency: ${recencyWindow}.`,
     };
   });
 
@@ -429,6 +445,7 @@ function buildDocumentInventory(results: SonarSearchResult[]) {
       date: result.date || result.last_updated || 'Unknown',
       source: result.url ? sourceLabel(result.url) : result.source || 'Web',
       status: result.status || 'Candidate',
+      recencyWindow: result.recencyWindow || 'Undated source',
       notes: result.notes || '',
       url: result.url,
     }));
@@ -500,6 +517,7 @@ function buildEvidencePackage({
   modeLabel,
   outputType,
   timestamp,
+  recencyScope,
   searchQueries,
   searchResults,
 }: {
@@ -507,6 +525,7 @@ function buildEvidencePackage({
   modeLabel: string;
   outputType: string;
   timestamp: string;
+  recencyScope: RecencyScope;
   searchQueries: string[];
   searchResults: SonarSearchResult[];
 }) {
@@ -517,6 +536,12 @@ function buildEvidencePackage({
     research_mode: modeLabel,
     output_type: outputType,
     search_timestamp: timestamp,
+    recency_policy: {
+      as_of_date: recencyScope.asOfDate,
+      preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+      fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
+      rule: 'Prefer last 3 months; expand to last 6 months only when no credible 3-month evidence is found; label older material as background.',
+    },
     search_queries_used: searchQueries,
     document_inventory: buildDocumentInventory(searchResults).map((item) => ({
       title: item.document,
@@ -526,6 +551,7 @@ function buildEvidencePackage({
       date: item.date,
       status: item.status.toLowerCase(),
       confidence: item.sourceTier.startsWith('Tier 1') ? 'high' : 'medium',
+      recency_window: item.recencyWindow,
       notes: item.notes,
     })),
     coverage_dashboard: coverage,
@@ -539,33 +565,44 @@ function candidateSourceList(results: SonarSearchResult[]) {
     const label = result.title || (result.url ? sourceLabel(result.url) : 'Untitled source');
     const date = result.date || result.last_updated || 'No date';
     const snippet = result.snippet ? ` Snippet: ${result.snippet}` : '';
-    return `${index + 1}. [${result.sourceTier} | ${result.documentType} | ${date}] ${label}. URL: ${result.url ?? 'No URL'}.${snippet}`;
+    const recency = result.recencyWindow || 'Undated source';
+    return `${index + 1}. [${result.sourceTier} | ${result.documentType} | ${recency} | ${date}] ${label}. URL: ${result.url ?? 'No URL'}.${snippet}`;
   }).join('\n');
 }
 
-function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean) {
+function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean, recencyScope: RecencyScope) {
   if (!financeFocused) {
-    return 'Format the answer as a short research memo with: Current answer, Evidence, Gaps, Next step.';
+    return [
+      'Format the answer as a short research memo with: Current answer, Evidence, Gaps, Next step.',
+      `Use the preferred 3-month window (${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}) first, then the 6-month fallback (${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}) only if needed.`,
+      noRecentInfoGuide(),
+    ].join('\n');
   }
 
   const modeLabel = PROMPT_MODE_OPTIONS[promptMode].label;
 
   return [
     'Use this exact finance-focused structure:',
-    '1. Research Mode',
+    '1. Recency Discipline',
+    `- Preferred window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}.`,
+    `- Fallback window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
+    '- Label each development as Preferred 3-month evidence, 6-month fallback evidence, Older context only, or Undated source.',
+    '- If no current item is found, classify the reason using: No recent change found, Stale source only, Insufficient public evidence, or Needs manual verification.',
+    '',
+    '2. Research Mode',
     `- Selected mode: ${modeLabel}`,
     '- Search provider: Perplexity Sonar + Perplexity Search API',
     '- Timestamp:',
     '- Search scope:',
     '',
-    '2. Issuer Identification',
+    '3. Issuer Identification',
     '- Legal name:',
     '- Sector:',
     '- State:',
     '- Systems / enterprise:',
     '- Revenue pledge, if available:',
     '',
-    '3. Document Discovery Summary',
+    '4. Document Discovery Summary',
     '- ACFR:',
     '- Official Statement:',
     '- Rating Report:',
@@ -573,11 +610,11 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean)
     '- Budget / CIP:',
     '- Investor Relations:',
     '',
-    '4. Document Inventory',
-    '| Document | Type | Source Tier | Date | Source | Status | Notes |',
-    '|---|---|---|---|---|---|---|',
+    '5. Document Inventory',
+    '| Document | Type | Source Tier | Date | Recency | Source | Status | Notes |',
+    '|---|---|---|---|---|---|---|---|',
     '',
-    '5. Coverage Dashboard',
+    '6. Coverage Dashboard',
     '| Evidence Area | Status | Confidence |',
     '|---|---|---|',
     '| Audited financials | Found / Missing | High / Medium / Low |',
@@ -586,20 +623,21 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean)
     '| Continuing disclosure | Found / Missing | High / Medium / Low |',
     '| Recent risk events | Found / Missing | High / Medium / Low |',
     '',
-    '6. Working Conclusion',
+    '7. Working Conclusion',
     'Only provide conclusions supported by Tier 1 or Tier 2 sources.',
     '',
-    '7. Key Credit Considerations',
+    '8. Key Credit Considerations',
     '- Strengths:',
     '- Risks:',
     '- Recent developments:',
     '- Financial metrics:',
     '- Debt / covenant considerations:',
     '',
-    '8. Missing Data / Limits',
+    '9. Missing Data / Limits',
     'Explicitly state what cannot be concluded due to missing documents.',
+    noRecentInfoGuide(),
     '',
-    '9. Next Search Queries',
+    '10. Next Search Queries',
     'List exact follow-up queries to improve evidence coverage.',
   ].join('\n');
 }
@@ -696,13 +734,14 @@ export async function POST(request: Request) {
   const mode = PROMPT_MODE_OPTIONS[promptMode];
   const financeFocused = FINANCE_FOCUSED_MODES.has(promptMode);
   const timestamp = new Date().toISOString();
+  const recencyScope = buildRecencyScope(new Date(timestamp));
 
   if (!query) {
     return NextResponse.json({ error: 'Query is required.' }, { status: 400 });
   }
 
   const model = process.env.PUBFIN_MODEL || 'sonar-pro';
-  const searchQueries = buildSearchQueries(query, promptMode, customAngle);
+  const searchQueries = buildSearchQueries(query, promptMode, customAngle, recencyScope);
   const searchSettled = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity
     ? await Promise.allSettled(
       searchQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
@@ -713,13 +752,16 @@ export async function POST(request: Request) {
   );
   const classifiedSearchApiResults = classifyResults(
     mergeSearchResults(searchApiResults),
-    financeFocused
+    financeFocused,
+    recencyScope
   );
   const coreFinanceDocumentsFound = hasCoreFinanceDocuments(classifiedSearchApiResults);
 
   const prompt = [
     'You are Civic Ledger, a public-finance research assistant.',
     'Use current public web sources to answer questions about municipal finance, public issuers, budgets, audited financial statements, official statements, debt issuance, ratings, and disclosure.',
+    recencyPrompt(recencyScope),
+    noRecentInfoGuide(),
     'Prioritize municipal finance evidence over general encyclopedia, media, or policy summaries.',
     'Source quality tiers:',
     'Tier 1 = ACFR/audited financial statements, official statements/POS, EMMA/MSRB filings, continuing disclosures, rating agency reports/actions, bond documents, investor relations debt pages.',
@@ -732,7 +774,7 @@ export async function POST(request: Request) {
     'Answer in the same language as the user.',
     'Be concise, source-grounded, and explicit about dates.',
     'If current evidence is insufficient, say what is missing instead of guessing.',
-    modeAnswerInstructions(promptMode, financeFocused),
+    modeAnswerInstructions(promptMode, financeFocused, recencyScope),
   ].join('\n');
 
   const userContent = [
@@ -744,13 +786,16 @@ export async function POST(request: Request) {
     `Preferred topic filter: ${topic}`,
     `Preferred source filter: ${source}`,
     `Timestamp: ${timestamp}`,
+    `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+    `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
     `Search scope: ${searchQueries.join(' | ')}`,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
     '',
     'Candidate sources from the Search API, already ranked by source quality:',
     candidateSourceList(classifiedSearchApiResults) || 'No candidate sources returned by the Search API.',
     '',
-    'Find the freshest credible public sources and include source names and links. Use Tier 1 and Tier 2 sources for finance conclusions.',
+    'Find the freshest credible public sources and include source names, dates, and links. Use Tier 1 and Tier 2 sources for finance conclusions.',
+    'Do not call older evidence "recent"; classify it as older context and explain whether it is still structurally relevant.',
   ].filter(Boolean).join('\n');
 
   const res = await fetch(SONAR_URL, {
@@ -792,7 +837,7 @@ export async function POST(request: Request) {
   const searchResults = classifyResults(mergeSearchResults(
     sonar.search_results ?? [],
     classifiedSearchApiResults
-  ), financeFocused);
+  ), financeFocused, recencyScope);
   const finalCoreFinanceDocumentsFound = hasCoreFinanceDocuments(searchResults);
   const citations = mergeSearchResults(
     (sonar.citations ?? []).map((url) => ({ url })),
@@ -801,6 +846,7 @@ export async function POST(request: Request) {
   const facts = [
     `${mode.label} mode`,
     `Output type requested: ${outputType}`,
+    `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}; fallback: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
     financeFocused
       ? finalCoreFinanceDocumentsFound
         ? 'Core finance documents were found in this search run.'
@@ -813,6 +859,7 @@ export async function POST(request: Request) {
     modeLabel: mode.label,
     outputType,
     timestamp,
+    recencyScope,
     searchQueries,
     searchResults,
   });
@@ -843,6 +890,10 @@ export async function POST(request: Request) {
         include_coverage_dashboard: workflowOptions.includeCoverageDashboard,
         include_missing_data: workflowOptions.includeMissingData,
         include_export: workflowOptions.includeExport,
+        recency_policy: {
+          preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+          fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
+        },
       },
       workflowOptions,
       outputType,
@@ -857,6 +908,7 @@ export async function POST(request: Request) {
       searchQueries,
       relatedQuestions: sonar.related_questions ?? [],
       generatedAt: timestamp,
+      recencyScope,
       model: sonar.model || model,
       usage: sonar.usage ?? null,
     },

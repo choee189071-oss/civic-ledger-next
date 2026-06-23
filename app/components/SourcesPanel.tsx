@@ -43,6 +43,7 @@ function currentRunSources(detail: any) {
     sourceTier: item.source_tier ?? item.sourceTier,
     documentType: item.document_type ?? item.type,
     date: item.date,
+    recencyWindow: item.recency_window ?? item.recencyWindow,
     notes: item.notes,
     status: item.status,
   }));
@@ -53,6 +54,7 @@ function currentRunSources(detail: any) {
     sourceTier: item.sourceTier,
     documentType: item.documentType,
     date: item.date || item.last_updated,
+    recencyWindow: item.recencyWindow,
     notes: item.snippet || item.notes,
     status: 'Candidate',
   }));
@@ -114,6 +116,7 @@ export function SourcesPanel({ items, detail, savedRecords, sourceStatuses, onSo
                     <div className="record-meta">
                       <span>{source.sourceTier || 'Source'}</span>
                       <span>{source.documentType || 'Document'}</span>
+                      <span>{source.recencyWindow || 'Undated source'}</span>
                       {source.date && <span>{source.date}</span>}
                     </div>
                     {source.url ? (

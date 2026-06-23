@@ -346,7 +346,7 @@ export function DetailPanel({
                       ) : (
                         <strong>{row.document}</strong>
                       )}
-                      <p className="muted small">{row.type} · {row.source} · {row.date}</p>
+                      <p className="muted small">{row.type} · {row.source} · {row.date} · {row.recencyWindow ?? 'Undated source'}</p>
                     </div>
                     <span className="tier-pill">{row.sourceTier}</span>
                   </article>
