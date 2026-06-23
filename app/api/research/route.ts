@@ -26,6 +26,7 @@ type SonarResponse = {
 };
 
 const SONAR_URL = 'https://api.perplexity.ai/v1/sonar';
+const SEARCH_URL = 'https://api.perplexity.ai/search';
 
 function firstParagraph(content: string) {
   return content
@@ -52,6 +53,48 @@ function sourceFacts(searchResults: SonarSearchResult[]) {
       const snippet = result.snippet ? ` — ${result.snippet}` : '';
       return `${label}${date ? ` (${date})` : ''}${snippet}`;
     });
+}
+
+function mergeSearchResults(...resultGroups: SonarSearchResult[][]) {
+  const seen = new Set<string>();
+  const merged: SonarSearchResult[] = [];
+
+  for (const result of resultGroups.flat()) {
+    const key = (result.url || result.title || '').trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(result);
+  }
+
+  return merged.slice(0, 20);
+}
+
+function apiErrorMessage(payload: any, status: number) {
+  if (payload?.error?.message) {
+    return payload.error.message;
+  }
+
+  if (payload?.message) {
+    return payload.message;
+  }
+
+  if (Array.isArray(payload?.detail)) {
+    return payload.detail
+      .map((item: any) => {
+        const path = Array.isArray(item.loc) ? item.loc.join(' -> ') : 'request';
+        return `${path}: ${item.msg ?? 'Invalid value'}`;
+      })
+      .join('; ');
+  }
+
+  if (typeof payload?.detail === 'string') {
+    return payload.detail;
+  }
+
+  return `Perplexity API error: ${status}`;
 }
 
 export async function POST(request: Request) {
@@ -93,34 +136,51 @@ export async function POST(request: Request) {
     'Find the freshest credible public sources and include source names and links.',
   ].join('\n');
 
-  const res = await fetch(SONAR_URL, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { content: `${prompt}\n\n${userContent}` },
-      ],
-      max_tokens: 1600,
-      temperature: 0.2,
-      web_search_options: {
-        search_mode: 'web',
-        return_related_questions: true,
-        enable_search_classifier: false,
+  const [res, searchRes] = await Promise.all([
+    fetch(SONAR_URL, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: userContent },
+        ],
+        max_tokens: 1600,
+        temperature: 0.2,
+        web_search_options: {
+          search_mode: 'web',
+          return_related_questions: true,
+          enable_search_classifier: false,
+        },
+      }),
     }),
-  });
+    fetch(SEARCH_URL, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        max_results: 12,
+        search_context_size: 'medium',
+      }),
+    }),
+  ]);
 
   const payload = await res.json().catch(() => ({}));
+  const searchPayload = await searchRes.json().catch(() => ({}));
 
   if (!res.ok) {
     return NextResponse.json(
       {
-        error: payload?.error?.message || payload?.message || `Perplexity API error: ${res.status}`,
+        error: apiErrorMessage(payload, res.status),
       },
       { status: res.status }
     );
@@ -128,8 +188,14 @@ export async function POST(request: Request) {
 
   const sonar = payload as SonarResponse;
   const content = sonar.choices?.[0]?.message?.content?.trim() || 'No answer returned.';
-  const searchResults = sonar.search_results ?? [];
-  const citations = sonar.citations ?? (searchResults.map((result) => result.url).filter(Boolean) as string[]);
+  const searchResults = mergeSearchResults(
+    sonar.search_results ?? [],
+    searchRes.ok ? searchPayload.results ?? [] : []
+  );
+  const citations = mergeSearchResults(
+    (sonar.citations ?? []).map((url) => ({ url })),
+    searchResults
+  ).map((result) => result.url).filter(Boolean) as string[];
   const facts = sourceFacts(searchResults);
 
   return NextResponse.json({

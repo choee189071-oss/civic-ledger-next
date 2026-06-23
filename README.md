@@ -6,6 +6,7 @@ A California public finance AI research workspace built with Next.js App Router.
 - Componentized frontend (Search, Detail, Reading, Sources)
 - App Router route handlers for live research and source search
 - Perplexity Sonar-backed research answers with citations
+- Perplexity Search API evidence expansion with ranked live web results
 - Open FI$Cal search via the California CKAN API
 
 ## Mock endpoints
@@ -23,6 +24,8 @@ Create `.env.local` for local development, or add these in Vercel Project Settin
 PUBFIN_API_KEY=your_perplexity_api_key
 PUBFIN_MODEL=sonar-pro
 ```
+
+`PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results.
 
 ## Getting started
 

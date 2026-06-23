@@ -16,6 +16,7 @@ export function EvidencePanel({ detail, sources }: Props) {
     ? sources.filter((source) => source.name === detail.source || source.topic === detail.topic)
     : sources.slice(0, 3);
   const liveResults = detail?.searchResults ?? [];
+  const evidenceCount = liveResults.length > 0 ? liveResults.length : relatedSources.length;
 
   return (
     <aside className="workspace-panel evidence-panel">
@@ -24,7 +25,7 @@ export function EvidencePanel({ detail, sources }: Props) {
           <p className="eyebrow">Evidence</p>
           <h2>Sources</h2>
         </div>
-        <span className="count">{relatedSources.length}</span>
+        <span className="count">{evidenceCount}</span>
       </div>
 
       {detail && (
@@ -54,7 +55,7 @@ export function EvidencePanel({ detail, sources }: Props) {
         <section className="evidence-block">
           <h3>Live search results</h3>
           <div className="stack">
-            {liveResults.slice(0, 6).map((result: any) => (
+            {liveResults.slice(0, 12).map((result: any) => (
               <article key={result.url || result.title} className="source-card">
                 <div className="record-meta">
                   <span>{result.source || 'Web'}</span>
