@@ -155,6 +155,7 @@ function matchesIssuer(record: any, issuer: string) {
 
 export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props) {
   const [sectorId, setSectorId] = useState('education-ccd');
+  const [monitorMode, setMonitorMode] = useState<'single' | 'sector'>('single');
   const [query, setQuery] = useState('');
   const [selectedIssuer, setSelectedIssuer] = useState(ccdIssuers[0]);
   const [ccdUpdates, setCcdUpdates] = useState<CcdUpdate[]>([]);
@@ -276,102 +277,124 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
         ))}
       </div>
 
-      {sectorId === 'education-ccd' && (
-        <section className="general-update-panel">
-          <div>
-            <p className="eyebrow">Batch Monitor</p>
-            <h3>General CCD Update</h3>
-            <p className="muted small">
-              Run one sector-wide scan across all {ccdIssuers.length} California CCD issuers and generate a report only for issuers with material new developments.
-            </p>
-          </div>
-          <button
-            className="button-primary"
-            onClick={runFullCcdUpdate}
-            disabled={isRunningGeneralUpdate}
-          >
-            {isRunningGeneralUpdate ? 'Running CCD Queue...' : 'Run General CCD Update'}
-          </button>
-        </section>
-      )}
+      <div className="monitor-mode-tabs">
+        <button
+          className={monitorMode === 'single' ? 'active' : ''}
+          onClick={() => setMonitorMode('single')}
+        >
+          Single Issuer Monitor
+        </button>
+        <button
+          className={monitorMode === 'sector' ? 'active' : ''}
+          onClick={() => setMonitorMode('sector')}
+        >
+          General Sector Update
+        </button>
+      </div>
 
-      {sectorId === 'education-ccd' && (
-        <section className="ccd-update-console">
-          <div className="section-heading">
+      {monitorMode === 'sector' && sectorId === 'education-ccd' && (
+        <div className="sector-update-workspace">
+          <section className="general-update-panel">
             <div>
-              <h3>General CCD Update Report</h3>
+              <p className="eyebrow">Batch Monitor</p>
+              <h3>General CCD Update</h3>
               <p className="muted small">
-                {isRunningGeneralUpdate
-                  ? `Scanning ${currentScanIssuer}...`
-                  : `${ccdUpdates.length} of ${ccdIssuers.length} issuers scanned`}
+                Run a sector-wide queue across all {ccdIssuers.length} California CCD issuers. Each issuer is checked separately and summarized in 2-3 sentences.
               </p>
             </div>
-            <div className="report-toolbar">
-              <button className="button-secondary" onClick={copyCcdReport} disabled={ccdUpdates.length === 0}>Copy Report</button>
-              <button className="button-secondary" onClick={downloadCcdReport} disabled={ccdUpdates.length === 0}>Download MD</button>
+            <button
+              className="button-primary"
+              onClick={runFullCcdUpdate}
+              disabled={isRunningGeneralUpdate}
+            >
+              {isRunningGeneralUpdate ? 'Running CCD Queue...' : 'Run General CCD Update'}
+            </button>
+          </section>
+
+          <section className="ccd-update-console">
+            <div className="section-heading">
+              <div>
+                <h3>General CCD Update Report</h3>
+                <p className="muted small">
+                  {isRunningGeneralUpdate
+                    ? `Scanning ${currentScanIssuer}...`
+                    : `${ccdUpdates.length} of ${ccdIssuers.length} issuers scanned`}
+                </p>
+              </div>
+              <div className="report-toolbar">
+                <button className="button-secondary" onClick={copyCcdReport} disabled={ccdUpdates.length === 0}>Copy Report</button>
+                <button className="button-secondary" onClick={downloadCcdReport} disabled={ccdUpdates.length === 0}>Download MD</button>
+              </div>
             </div>
-          </div>
 
-          <div className="ccd-progress">
-            <span style={{ width: `${Math.round((ccdUpdates.length / ccdIssuers.length) * 100)}%` }} />
-          </div>
+            <div className="ccd-progress">
+              <span style={{ width: `${Math.round((ccdUpdates.length / ccdIssuers.length) * 100)}%` }} />
+            </div>
 
-          {generalUpdateError && <div className="error-banner">{generalUpdateError}</div>}
+            {generalUpdateError && <div className="error-banner">{generalUpdateError}</div>}
 
-          <div className="ccd-update-grid">
-            {ccdIssuers.map((issuer) => {
-              const update = ccdUpdates.find((item) => item.issuer === issuer);
-              const active = currentScanIssuer === issuer;
+            <div className="ccd-update-grid">
+              {ccdIssuers.map((issuer) => {
+                const update = ccdUpdates.find((item) => item.issuer === issuer);
+                const active = currentScanIssuer === issuer;
 
-              return (
-                <article key={issuer} className={`ccd-update-row ${active ? 'active' : ''}`}>
-                  <div>
-                    <div className="record-meta">
-                      <span>{update ? 'Checked' : active ? 'Scanning' : 'Queued'}</span>
-                      {update?.error && <span>Needs verification</span>}
+                return (
+                  <article key={issuer} className={`ccd-update-row ${active ? 'active' : ''}`}>
+                    <div>
+                      <div className="record-meta">
+                        <span>{update ? 'Checked' : active ? 'Scanning' : 'Queued'}</span>
+                        {update?.error && <span>Needs verification</span>}
+                      </div>
+                      <h3>{issuer}</h3>
+                      <p className="muted small">
+                        {update ? update.update.replace(/^### .+\n?/m, '').slice(0, 520) : active ? 'Live scan in progress...' : 'Waiting for issuer-specific scan.'}
+                      </p>
                     </div>
-                    <h3>{issuer}</h3>
-                    <p className="muted small">
-                      {update ? update.update.replace(/^### .+\n?/m, '').slice(0, 520) : active ? 'Live scan in progress...' : 'Waiting for issuer-specific scan.'}
-                    </p>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </div>
       )}
 
-      <div className="developments-layout">
-        <aside className="issuer-browser">
-          <div>
-            <h3>{sector.label}</h3>
-            <p className="muted small">{sector.description}</p>
-          </div>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter issuer..."
-          />
-          <div className="issuer-list">
-            {filteredIssuers.length === 0 && (
-              <p className="muted small">This sector is ready for issuer data.</p>
-            )}
-            {filteredIssuers.map((issuer) => (
-              <button
-                key={issuer}
-                className={selectedIssuer === issuer ? 'active' : ''}
-                onClick={() => setSelectedIssuer(issuer)}
-              >
-                <span>{issuer}</span>
-                <strong>CCD</strong>
-              </button>
-            ))}
-          </div>
-        </aside>
+      {monitorMode === 'sector' && sectorId !== 'education-ccd' && (
+        <div className="empty-workflow-state">
+          General sector update is ready for this category once issuers are added.
+        </div>
+      )}
 
-        <main className="issuer-development-detail">
-          {selectedIssuer ? (
+      {monitorMode === 'single' && (
+        <div className="developments-layout">
+          <aside className="issuer-browser">
+            <div>
+              <h3>{sector.label}</h3>
+              <p className="muted small">{sector.description}</p>
+            </div>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter issuer..."
+            />
+            <div className="issuer-list">
+              {filteredIssuers.length === 0 && (
+                <p className="muted small">This sector is ready for issuer data.</p>
+              )}
+              {filteredIssuers.map((issuer) => (
+                <button
+                  key={issuer}
+                  className={selectedIssuer === issuer ? 'active' : ''}
+                  onClick={() => setSelectedIssuer(issuer)}
+                >
+                  <span>{issuer}</span>
+                  <strong>CCD</strong>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <main className="issuer-development-detail">
+            {selectedIssuer ? (
             <>
               <div className="issuer-detail-head">
                 <div>
@@ -461,8 +484,9 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
               Add issuers to this sector to start monitoring recent developments.
             </div>
           )}
-        </main>
-      </div>
+          </main>
+        </div>
+      )}
     </section>
   );
 }
