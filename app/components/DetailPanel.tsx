@@ -1,9 +1,25 @@
 type Props = {
   detail: any;
+  reportTemplate: string;
+  generatedReport: any | null;
+  isGeneratingReport: boolean;
+  reportError: string | null;
+  onReportTemplate: (value: string) => void;
+  onGenerateReport: () => void;
   onOpenReading: () => void;
   onSave: () => void;
   isSaved: boolean;
 };
+
+const reportTemplates = [
+  ['general-research', 'General Research'],
+  ['credit-memo', 'Credit Memo'],
+  ['investment-committee-memo', 'Investment Committee Memo'],
+  ['rating-committee-memo', 'Rating Committee Memo'],
+  ['due-diligence-report', 'Due Diligence Report'],
+  ['board-briefing', 'Board Briefing'],
+  ['executive-summary', 'Executive Summary'],
+];
 
 function citationLabel(citation: string) {
   try {
@@ -17,7 +33,18 @@ function isUrl(value: string) {
   return /^https?:\/\//.test(value);
 }
 
-export function DetailPanel({ detail, onOpenReading, onSave, isSaved }: Props) {
+export function DetailPanel({
+  detail,
+  reportTemplate,
+  generatedReport,
+  isGeneratingReport,
+  reportError,
+  onReportTemplate,
+  onGenerateReport,
+  onOpenReading,
+  onSave,
+  isSaved,
+}: Props) {
   if (!detail) {
     return (
       <section className="workspace-panel answer-panel empty-state">
@@ -127,6 +154,50 @@ export function DetailPanel({ detail, onOpenReading, onSave, isSaved }: Props) {
             )
           ))}
         </div>
+      </section>
+
+      <section className="answer-section report-workflow">
+        <div className="report-workflow-head">
+          <div>
+            <h3>LLM writer</h3>
+            <p className="muted small">Turn this research package into a deliverable work product.</p>
+          </div>
+          <span className="status-pill">Layer 3</span>
+        </div>
+
+        <div className="report-controls">
+          <label>
+            Report Template
+            <select value={reportTemplate} onChange={(e) => onReportTemplate(e.target.value)}>
+              {reportTemplates.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="button-primary"
+            onClick={onGenerateReport}
+            disabled={isGeneratingReport}
+          >
+            {isGeneratingReport ? 'Generating...' : 'Generate report'}
+          </button>
+        </div>
+
+        {reportError && (
+          <div className="error-banner">{reportError}</div>
+        )}
+
+        {generatedReport && (
+          <article className="generated-report">
+            <div className="record-meta">
+              <span>{generatedReport.templateLabel}</span>
+              <span>{generatedReport.model}</span>
+              <span>{new Date(generatedReport.generatedAt).toLocaleString()}</span>
+            </div>
+            <h3>{generatedReport.title}</h3>
+            <div className="report-body">{generatedReport.content}</div>
+          </article>
+        )}
       </section>
 
       <div className="action-row">

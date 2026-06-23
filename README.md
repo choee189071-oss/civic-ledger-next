@@ -9,6 +9,7 @@ A California public finance AI research workspace built with Next.js App Router.
 - Perplexity Search API evidence expansion with ranked live web results
 - Research prompt modes for issuer credit, document discovery, debt, financial performance, risk monitoring, and custom angles
 - Source tiering for public-finance evidence quality, with document inventory and coverage dashboard
+- OpenAI-powered report writer for credit memos, IC memos, rating committee memos, diligence reports, board briefings, and executive summaries
 - Open FI$Cal search via the California CKAN API
 
 ## Mock endpoints
@@ -25,9 +26,12 @@ Create `.env.local` for local development, or add these in Vercel Project Settin
 ```bash
 PUBFIN_API_KEY=your_perplexity_api_key
 PUBFIN_MODEL=sonar-pro
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-5.5
 ```
 
 `PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results.
+`OPENAI_API_KEY` is used by the report writer to turn structured research packages into deliverable work products.
 
 ## Getting started
 
@@ -49,6 +53,7 @@ app/
     search/          # GET /api/search
     sources/         # GET /api/sources
     research/        # POST /api/research
+    report/          # POST /api/report
     result/[id]/     # GET /api/result/:id
     reading/[id]/    # GET /api/reading/:id
   components/

@@ -543,6 +543,60 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.report-workflow {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.report-workflow-head,
+.report-controls {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.report-controls {
+  align-items: end;
+}
+
+.report-controls label {
+  color: var(--color-muted);
+  display: grid;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.report-controls select {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.generated-report {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.report-body {
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .tier-pill {
   background: #eef6fc;
   border: 1px solid #cfe4f5;
@@ -671,6 +725,7 @@ h3 {
   color: var(--color-text);
   font-size: 17px;
   line-height: 1.75;
+  white-space: pre-wrap;
 }
 
 .empty-state {
@@ -739,6 +794,12 @@ h3 {
   .button-primary,
   .button-secondary {
     width: 100%;
+  }
+
+  .report-workflow-head,
+  .report-controls {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .mini-table-row,

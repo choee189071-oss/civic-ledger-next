@@ -36,14 +36,18 @@ export default function HomePage() {
   const [source, setSource] = useState('all');
   const [sort, setSort] = useState('score');
   const [tab, setTab] = useState('results');
+  const [reportTemplate, setReportTemplate] = useState('credit-memo');
   const [results, setResults] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<any | null>(null);
   const [reading, setReading] = useState<any | null>(null);
   const [savedRecords, setSavedRecords] = useState<any[]>([]);
   const [isResearching, setIsResearching] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   async function loadSearch(
     nextQuery = query,
@@ -65,9 +69,11 @@ export default function HomePage() {
     if (first) {
       setSelectedId(first.id);
       setDetail(first);
+      setGeneratedReport(first.generatedReport ?? null);
     } else {
       setSelectedId(null);
       setDetail(null);
+      setGeneratedReport(null);
     }
   }
 
@@ -81,6 +87,7 @@ export default function HomePage() {
     const existing = results.find((item) => item.id === id);
     if (existing) {
       setDetail(normalizeRecord(existing));
+      setGeneratedReport(existing.generatedReport ?? null);
       return;
     }
 
@@ -88,6 +95,7 @@ export default function HomePage() {
     if (!res.ok) return;
     const payload = await res.json();
     setDetail(normalizeRecord(payload));
+    setGeneratedReport(payload.generatedReport ?? null);
   }
 
   async function loadReading(id: string) {
@@ -121,6 +129,7 @@ export default function HomePage() {
 
       const researchPayload = await researchRes.json();
       const researchRecord = normalizeRecord(researchPayload.record);
+      setGeneratedReport(null);
       const nextResults = [
         researchRecord,
         ...searchItems.filter((item: any) => item.id !== researchRecord.id),
@@ -139,8 +148,51 @@ export default function HomePage() {
     }
   }
 
+  async function generateReport() {
+    if (!detail) return;
+
+    setIsGeneratingReport(true);
+    setReportError(null);
+
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ record: detail, template: reportTemplate }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || 'Report generation failed.');
+      }
+
+      const report = payload.report;
+      setGeneratedReport(report);
+      setDetail((current: any) => current ? { ...current, generatedReport: report } : current);
+      setResults((items) =>
+        items.map((item) => item.id === detail.id ? { ...item, generatedReport: report } : item)
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Report generation failed.';
+      setReportError(message);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
   function openCurrentReading() {
     if (!detail) return;
+
+    if (generatedReport) {
+      setReading({
+        id: generatedReport.id,
+        title: generatedReport.title,
+        body: [generatedReport.content],
+      });
+      setView('reading');
+      return;
+    }
 
     if (detail.kind === 'research') {
       setReading({
@@ -167,6 +219,7 @@ export default function HomePage() {
     setSavedRecords((records) => {
       const nextRecord = {
         ...detail,
+        generatedReport,
         savedAt: new Date().toISOString()
       };
       const next = [
@@ -200,6 +253,7 @@ export default function HomePage() {
           <div className="status-strip">
             <span className="status-pill ready">Build ready</span>
             <span className="status-pill">Perplexity ready</span>
+            <span className="status-pill">OpenAI writer</span>
             <span className="status-pill">{savedRecords.length} saved</span>
           </div>
         </header>
@@ -230,6 +284,12 @@ export default function HomePage() {
             />
             <DetailPanel
               detail={detail}
+              reportTemplate={reportTemplate}
+              generatedReport={generatedReport}
+              isGeneratingReport={isGeneratingReport}
+              reportError={reportError}
+              onReportTemplate={setReportTemplate}
+              onGenerateReport={generateReport}
               onOpenReading={openCurrentReading}
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
