@@ -29,7 +29,9 @@ function normalizeRecord(item: any) {
 
 export default function HomePage() {
   const [view, setView] = useState('search');
-  const [query, setQuery] = useState('budget expenditures');
+  const [query, setQuery] = useState('LADWP');
+  const [promptMode, setPromptMode] = useState('issuer-credit-profile');
+  const [customAngle, setCustomAngle] = useState('');
   const [topic, setTopic] = useState('all');
   const [source, setSource] = useState('all');
   const [sort, setSort] = useState('score');
@@ -104,7 +106,7 @@ export default function HomePage() {
         fetch('/api/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, topic, source }),
+          body: JSON.stringify({ query, topic, source, promptMode, customAngle }),
         }),
         fetch(`/api/search?${new URLSearchParams({ q: query, topic, source, sort }).toString()}`),
       ]);
@@ -209,10 +211,14 @@ export default function HomePage() {
               topic={topic}
               source={source}
               sort={sort}
+              promptMode={promptMode}
+              customAngle={customAngle}
               items={results}
               selectedId={selectedId}
               tab={tab}
               onQuery={setQuery}
+              onPromptMode={setPromptMode}
+              onCustomAngle={setCustomAngle}
               onTopic={(v) => { setTopic(v); loadSearch(query, v, source, sort); }}
               onSource={(v) => { setSource(v); loadSearch(query, topic, v, sort); }}
               onSort={(v) => { setSort(v); loadSearch(query, topic, source, v); }}

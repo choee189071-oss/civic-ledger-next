@@ -42,16 +42,68 @@ export function DetailPanel({ detail, onOpenReading, onSave, isSaved }: Props) {
         <p>{detail.summary}</p>
       </div>
 
+      {detail.financeFocused && detail.coreFinanceDocumentsFound === false && (
+        <div className="warning-banner">
+          Core finance documents were not found in this search run. The memo is a preliminary issuer overview, not a credit conclusion.
+        </div>
+      )}
+
       <div className="record-meta">
         <span>{detail.topic}</span>
+        {detail.researchModeLabel && detail.researchModeLabel !== detail.topic && (
+          <span>{detail.researchModeLabel}</span>
+        )}
         <span>{detail.source}</span>
         <span>Score {detail.score}</span>
       </div>
 
       <section className="answer-section">
         <h3>Working conclusion</h3>
-        <p className="muted">{detail.snippet}</p>
+        <p className="muted answer-body">{detail.snippet}</p>
       </section>
+
+      {detail.coverageDashboard?.length > 0 && (
+        <section className="answer-section">
+          <h3>Coverage dashboard</h3>
+          <div className="mini-table">
+            <div className="mini-table-row header">
+              <span>Evidence Area</span>
+              <span>Status</span>
+              <span>Confidence</span>
+            </div>
+            {detail.coverageDashboard.map((row: any) => (
+              <div key={row.area} className="mini-table-row">
+                <span>{row.area}</span>
+                <span>{row.status}</span>
+                <span>{row.confidence}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {detail.documentInventory?.length > 0 && (
+        <section className="answer-section">
+          <h3>Document inventory</h3>
+          <div className="document-list">
+            {detail.documentInventory.map((row: any) => (
+              <article key={`${row.document}-${row.url ?? row.source}`} className="document-row">
+                <div>
+                  {row.url ? (
+                    <a href={row.url} target="_blank" rel="noreferrer">
+                      <strong>{row.document}</strong>
+                    </a>
+                  ) : (
+                    <strong>{row.document}</strong>
+                  )}
+                  <p className="muted small">{row.type} · {row.source} · {row.date}</p>
+                </div>
+                <span className="tier-pill">{row.sourceTier}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="answer-section">
         <h3>Evidence notes</h3>

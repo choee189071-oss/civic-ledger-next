@@ -7,6 +7,8 @@ A California public finance AI research workspace built with Next.js App Router.
 - App Router route handlers for live research and source search
 - Perplexity Sonar-backed research answers with citations
 - Perplexity Search API evidence expansion with ranked live web results
+- Research prompt modes for issuer credit, document discovery, debt, financial performance, risk monitoring, and custom angles
+- Source tiering for public-finance evidence quality, with document inventory and coverage dashboard
 - Open FI$Cal search via the California CKAN API
 
 ## Mock endpoints
@@ -46,6 +48,7 @@ app/
   api/
     search/          # GET /api/search
     sources/         # GET /api/sources
+    research/        # POST /api/research
     result/[id]/     # GET /api/result/:id
     reading/[id]/    # GET /api/reading/:id
   components/

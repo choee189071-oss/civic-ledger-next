@@ -14,10 +14,14 @@ type Props = {
   topic: string;
   source: string;
   sort: string;
+  promptMode: string;
+  customAngle: string;
   items: Result[];
   selectedId: string | null;
   tab: string;
   onQuery: (v: string) => void;
+  onPromptMode: (v: string) => void;
+  onCustomAngle: (v: string) => void;
   onTopic: (v: string) => void;
   onSource: (v: string) => void;
   onSort: (v: string) => void;
@@ -27,6 +31,16 @@ type Props = {
   isResearching: boolean;
   researchError: string | null;
 };
+
+const promptModes = [
+  ['general-overview', 'General Overview'],
+  ['issuer-credit-profile', 'Issuer / Credit Profile'],
+  ['document-discovery', 'Document Discovery'],
+  ['debt-bond-research', 'Debt / Bond Research'],
+  ['financial-performance', 'Financial Performance'],
+  ['risk-news-monitoring', 'Risk / News Monitoring'],
+  ['custom-prompt', 'Custom Prompt'],
+];
 
 export function SearchPanel(props: Props) {
   const citations = [
@@ -67,6 +81,29 @@ export function SearchPanel(props: Props) {
       {props.researchError && (
         <div className="error-banner">{props.researchError}</div>
       )}
+
+      <div className="prompt-builder">
+        <label>
+          Prompt Mode
+          <select value={props.promptMode} onChange={(e) => props.onPromptMode(e.target.value)}>
+            {promptModes.map(([id, label]) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+        </label>
+
+        {props.promptMode === 'custom-prompt' && (
+          <label>
+            Research Angle
+            <textarea
+              value={props.customAngle}
+              onChange={(e) => props.onCustomAngle(e.target.value)}
+              placeholder="Analyze LADWP as a public power and water revenue bond issuer."
+              rows={4}
+            />
+          </label>
+        )}
+      </div>
 
       <div className="filters">
         <label>

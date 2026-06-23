@@ -38,7 +38,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -315,6 +316,17 @@ h3 {
   padding: 10px 11px;
 }
 
+.warning-banner {
+  background: #fff8ec;
+  border: 1px solid #f0d6aa;
+  border-radius: var(--radius);
+  color: #8a5314;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.45;
+  padding: 11px 12px;
+}
+
 .icon-button,
 .button-primary,
 .button-secondary {
@@ -350,11 +362,18 @@ h3 {
   color: var(--color-text);
 }
 
+.prompt-builder,
 .filters {
   display: grid;
   gap: 10px;
 }
 
+.prompt-builder {
+  border-bottom: 1px solid var(--color-divider);
+  padding-bottom: 12px;
+}
+
+.prompt-builder label,
 .filters label {
   color: var(--color-muted);
   display: grid;
@@ -363,6 +382,7 @@ h3 {
   gap: 5px;
 }
 
+.prompt-builder select,
 .filters select {
   appearance: none;
   background: var(--color-subtle);
@@ -371,6 +391,26 @@ h3 {
   color: var(--color-text);
   min-height: 36px;
   padding: 0 10px;
+}
+
+.prompt-builder textarea {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  line-height: 1.5;
+  min-height: 98px;
+  outline: 0;
+  padding: 10px;
+  resize: vertical;
+}
+
+.prompt-builder textarea:focus,
+.prompt-builder select:focus,
+.filters select:focus,
+.searchbox:focus-within {
+  border-color: #9dcced;
+  box-shadow: 0 0 0 2px #e5f3fb;
 }
 
 .segmented-control {
@@ -460,6 +500,61 @@ h3 {
   display: grid;
   gap: 10px;
   padding-top: 14px;
+}
+
+.answer-body {
+  white-space: pre-wrap;
+}
+
+.mini-table,
+.document-list {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mini-table-row,
+.document-row {
+  align-items: center;
+  border-top: 1px solid var(--color-divider);
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.mini-table-row {
+  grid-template-columns: minmax(0, 1.3fr) 88px 96px;
+}
+
+.mini-table-row:first-child,
+.document-row:first-child {
+  border-top: 0;
+}
+
+.mini-table-row.header {
+  background: var(--color-subtle);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.document-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.tier-pill {
+  background: #eef6fc;
+  border: 1px solid #cfe4f5;
+  border-radius: 999px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 780;
+  justify-self: end;
+  line-height: 1.2;
+  max-width: 190px;
+  padding: 6px 8px;
+  text-align: right;
 }
 
 .fact-line {
@@ -644,5 +739,17 @@ h3 {
   .button-primary,
   .button-secondary {
     width: 100%;
+  }
+
+  .mini-table-row,
+  .document-row {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .tier-pill {
+    justify-self: start;
+    max-width: 100%;
+    text-align: left;
   }
 }

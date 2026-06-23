@@ -58,7 +58,8 @@ export function EvidencePanel({ detail, sources }: Props) {
             {liveResults.slice(0, 12).map((result: any) => (
               <article key={result.url || result.title} className="source-card">
                 <div className="record-meta">
-                  <span>{result.source || 'Web'}</span>
+                  {result.sourceTier && <span>{result.sourceTier}</span>}
+                  <span>{result.documentType || result.source || 'Web'}</span>
                   {(result.date || result.last_updated) && (
                     <span>{result.date || result.last_updated}</span>
                   )}
@@ -71,6 +72,7 @@ export function EvidencePanel({ detail, sources }: Props) {
                   <h3>{result.title || 'Untitled result'}</h3>
                 )}
                 {result.snippet && <p className="muted small">{result.snippet}</p>}
+                {result.notes && <span className="freshness">{result.notes}</span>}
               </article>
             ))}
           </div>
