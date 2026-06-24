@@ -5,15 +5,18 @@ type Props = {
 };
 
 export function Sidebar({ current, onChange, savedRecords }: Props) {
-  const views = [
-    { id: 'search', label: 'Research desk', icon: '⌕' },
-    { id: 'developments', label: 'Issuer developments', icon: '↗' },
-    { id: 'workflows', label: 'Workflow center', icon: '▦' },
-    { id: 'profiles', label: 'Issuer profiles', icon: '▣' },
-    { id: 'documents', label: 'Document intake', icon: '▧' },
-    { id: 'reading', label: 'Reading room', icon: '□' },
-    { id: 'sources', label: 'Source list', icon: '◇' },
-    { id: 'library', label: 'Research library', icon: '▤' }
+  const primaryViews = [
+    { id: 'search', label: 'Search', icon: '⌕' },
+    { id: 'documents', label: 'Documents', icon: '▧' },
+    { id: 'profiles', label: 'Analysis', icon: '▣' },
+    { id: 'library', label: 'Reports', icon: '▤' },
+    { id: 'developments', label: 'Dashboard', icon: '↗' },
+    { id: 'sources', label: 'Settings', icon: '◇' },
+  ];
+
+  const workspaceViews = [
+    { id: 'reading', label: 'Editor', icon: '□' },
+    { id: 'workflows', label: 'Templates', icon: '▦' },
   ];
 
   return (
@@ -22,12 +25,12 @@ export function Sidebar({ current, onChange, savedRecords }: Props) {
         <div className="logo">CL</div>
         <div>
           <strong>Civic Ledger</strong>
-          <div className="muted small">Public finance workspace</div>
+          <div className="muted small">Municipal credit research</div>
         </div>
       </div>
 
       <nav className="nav">
-        {views.map((v) => (
+        {primaryViews.map((v) => (
           <button
             key={v.id}
             className={current === v.id ? 'active' : ''}
@@ -38,6 +41,22 @@ export function Sidebar({ current, onChange, savedRecords }: Props) {
           </button>
         ))}
       </nav>
+
+      <section className="sidebar-section compact">
+        <div className="sidebar-label">Workspace</div>
+        <nav className="nav secondary-nav">
+          {workspaceViews.map((v) => (
+            <button
+              key={v.id}
+              className={current === v.id ? 'active' : ''}
+              onClick={() => onChange(v.id)}
+            >
+              <span>{v.icon}</span>
+              {v.label}
+            </button>
+          ))}
+        </nav>
+      </section>
 
       <section className="sidebar-section">
         <div className="section-heading">
