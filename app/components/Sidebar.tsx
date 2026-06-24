@@ -19,10 +19,10 @@ export function Sidebar({
 }: Props) {
   const primaryViews = [
     { id: 'search', label: 'Search', icon: '⌕' },
+    { id: 'developments', label: 'Dashboard', icon: '↗' },
     { id: 'documents', label: 'Documents', icon: '▧' },
     { id: 'profiles', label: 'Analysis', icon: '▣' },
     { id: 'library', label: 'Reports', icon: '▤' },
-    { id: 'developments', label: 'Dashboard', icon: '↗' },
     { id: 'sources', label: 'Settings', icon: '◇' },
   ];
 
