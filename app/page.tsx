@@ -709,8 +709,17 @@ export default function HomePage() {
         <header className="workspace-header">
           <div className="workspace-title">
             <p className="eyebrow">Research Workspace</p>
-            <h1>California public finance desk</h1>
-            <p className="muted small">Live discovery, document parsing, evidence QA, and memo delivery in one analyst workspace.</p>
+            <h1>AI Workspace for Municipal Credit Research</h1>
+            <p className="workspace-subtitle">
+              Search issuers, analyze financial statements, generate credit memos, monitor municipal market risks, and produce evidence-backed reports.
+            </p>
+            <div className="hero-workflow-list" aria-label="Core municipal credit research workflow">
+              <span>Search issuers</span>
+              <span>Analyze financial statements</span>
+              <span>Generate Credit Memo</span>
+              <span>Monitor market risks</span>
+              <span>Export evidence-backed reports</span>
+            </div>
           </div>
           <div className="workspace-command">
             <div className="workspace-kpis">
@@ -732,9 +741,12 @@ export default function HomePage() {
               </div>
             </div>
             <div className="header-actions">
-              <button className="button-secondary" onClick={() => setView('documents')}>Upload PDF</button>
-              <button className="button-secondary" onClick={() => setView('developments')}>Run monitor</button>
-              <button className="button-primary" onClick={() => setView('library')}>Open library</button>
+              <button className="button-secondary" onClick={() => setView('search')}>Search Issuer</button>
+              <button className="button-secondary" onClick={() => setView('documents')}>Upload Documents</button>
+              <button className="button-secondary" onClick={() => void runResearch()} disabled={isResearching}>
+                {isResearching ? 'Researching...' : 'Start Research'}
+              </button>
+              <button className="button-primary" onClick={() => setView('library')}>Open Workspace</button>
             </div>
           </div>
         </header>
