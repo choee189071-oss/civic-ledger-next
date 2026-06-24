@@ -334,6 +334,15 @@ export function SearchPanel(props: Props) {
         <span><kbd>⌘</kbd><kbd>Enter</kbd> Run Research</span>
       </div>
 
+      <details className="progressive-section compact-disclosure">
+        <summary>
+          <div>
+            <span>Secondary</span>
+            <strong>Search interpretation and quick starts</strong>
+          </div>
+          <em>Open to refine intent or choose a template.</em>
+        </summary>
+
       <div className="universal-search-panel">
         <div className="section-heading">
           <div>
@@ -382,6 +391,8 @@ export function SearchPanel(props: Props) {
           </button>
         ))}
       </div>
+
+      </details>
 
       {props.researchError && (
         <div className="error-banner" role="alert">

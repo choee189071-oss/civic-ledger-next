@@ -1149,6 +1149,15 @@ export function DetailPanel({
             </div>
           </section>
 
+          <details className="progressive-section secondary-disclosure">
+            <summary>
+              <div>
+                <span>Secondary</span>
+                <strong>Analyst workspace, credit factors, and risks</strong>
+              </div>
+              <em>Open when moving from answer review to credit analysis.</em>
+            </summary>
+
           <section className="answer-section research-workspace-section">
             <div className="section-heading">
               <div>
@@ -1259,6 +1268,17 @@ export function DetailPanel({
             </div>
           </section>
 
+          </details>
+
+          <details className="progressive-section secondary-disclosure">
+            <summary>
+              <div>
+                <span>Secondary</span>
+                <strong>Evidence coverage and statement support</strong>
+              </div>
+              <em>Open before drafting or exporting.</em>
+            </summary>
+
           <section className="answer-section evidence-command">
             <div className="section-heading">
               <div>
@@ -1364,6 +1384,17 @@ export function DetailPanel({
               </div>
             )}
           </section>
+
+          </details>
+
+          <details className="progressive-section tertiary-disclosure">
+            <summary>
+              <div>
+                <span>Tertiary</span>
+                <strong>Diagnostics, raw source material, and setup</strong>
+              </div>
+              <em>Open for troubleshooting or analyst QA.</em>
+            </summary>
 
           {failureClassification && (
             <section className={`diagnostic-alert ${failureClassification.severity || 'warning'}`}>
@@ -1626,6 +1657,8 @@ export function DetailPanel({
               </div>
             </section>
           )}
+
+          </details>
         </>
       )}
 

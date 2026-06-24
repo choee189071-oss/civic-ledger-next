@@ -351,7 +351,9 @@ h3 {
 .theme-dark .structured-answer-grid article,
 .theme-dark .confidence-explanation,
 .theme-dark .follow-up-panel,
-.theme-dark .report-ai-experience > div {
+.theme-dark .report-ai-experience > div,
+.theme-dark .workspace-status-drawer,
+.theme-dark .progressive-section {
   background: var(--color-page);
   border-color: var(--color-divider);
   color: var(--color-text);
@@ -389,6 +391,13 @@ h3 {
   background: var(--color-subtle);
   border-color: var(--color-border);
   color: var(--color-muted);
+}
+
+.theme-dark .secondary-disclosure summary,
+.theme-dark .tertiary-disclosure summary,
+.theme-dark .compact-disclosure,
+.theme-dark .workspace-status-drawer summary {
+  background: var(--color-surface);
 }
 
 .workspace-title {
@@ -474,13 +483,52 @@ h3 {
   align-items: center;
   display: grid;
   gap: 9px;
-  grid-template-columns: repeat(3, max-content);
+  grid-template-columns: repeat(4, max-content);
   justify-content: end;
   width: 100%;
 }
 
 .theme-toggle {
   min-width: 92px;
+}
+
+.workspace-status-drawer {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  width: 100%;
+}
+
+.workspace-status-drawer summary {
+  align-items: center;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 42px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.workspace-status-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-status-drawer summary strong {
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  text-transform: none;
+}
+
+.workspace-status-drawer[open] summary {
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.workspace-status-drawer .workspace-kpis {
+  padding: 12px;
 }
 
 .workspace-grid {
@@ -1325,6 +1373,113 @@ h3 {
   display: grid;
   gap: 10px;
   padding-top: 14px;
+}
+
+.progressive-section {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  overflow: hidden;
+}
+
+.progressive-section + .progressive-section,
+.answer-section + .progressive-section,
+.progressive-section + .answer-section {
+  margin-top: 2px;
+}
+
+.progressive-section summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  list-style: none;
+  min-height: 58px;
+  padding: 13px 15px;
+}
+
+.progressive-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.progressive-section summary::after {
+  color: var(--color-primary-dark);
+  content: "Show";
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progressive-section[open] summary::after {
+  content: "Hide";
+}
+
+.progressive-section summary div {
+  display: grid;
+  gap: 3px;
+}
+
+.progressive-section summary span {
+  color: var(--color-faint);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.progressive-section summary strong {
+  color: var(--color-navy);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.progressive-section summary em {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-style: normal;
+  justify-self: end;
+}
+
+.progressive-section[open] {
+  padding-bottom: 14px;
+}
+
+.progressive-section[open] summary {
+  border-bottom: 1px solid var(--color-divider);
+  margin-bottom: 12px;
+}
+
+.progressive-section > .answer-section,
+.progressive-section > .missing-evidence-warning,
+.progressive-section > .diagnostic-alert {
+  border-top: 0;
+  margin: 0 14px 14px;
+  padding-top: 0;
+}
+
+.compact-disclosure {
+  background: #f7fbff;
+  border-color: #d7e9f8;
+}
+
+.compact-disclosure[open] {
+  padding-bottom: 12px;
+}
+
+.compact-disclosure > .universal-search-panel,
+.compact-disclosure > .quick-start-grid,
+.compact-disclosure > p {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.secondary-disclosure summary {
+  background: #fbfdff;
+}
+
+.tertiary-disclosure summary {
+  background: #f8fafc;
 }
 
 .structured-answer-section {
@@ -3798,6 +3953,14 @@ h3 {
   .shortcut-strip span,
   .empty-action-row button {
     width: 100%;
+  }
+
+  .progressive-section summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .progressive-section summary em {
+    display: none;
   }
 
   .workflow-tabs,

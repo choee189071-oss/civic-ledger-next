@@ -142,6 +142,69 @@ function isEditableTarget(target: EventTarget | null) {
   return target.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
 }
 
+function screenFocus(view: string) {
+  const screens: Record<string, { eyebrow: string; title: string; description: string; primaryAction: string; secondaryAction?: string }> = {
+    search: {
+      eyebrow: 'Search',
+      title: 'Which issuer are we researching?',
+      description: 'Start with one issuer, alias, CUSIP, sector, bond type, or natural-language question. The workspace will organize evidence and analysis after the run.',
+      primaryAction: 'Run Research',
+      secondaryAction: 'Upload Documents',
+    },
+    developments: {
+      eyebrow: 'Dashboard',
+      title: 'What changed recently?',
+      description: 'Monitor issuer and sector developments, then turn meaningful changes into a saved research run.',
+      primaryAction: 'Open Monitor',
+      secondaryAction: 'Search Issuer',
+    },
+    documents: {
+      eyebrow: 'Documents',
+      title: 'Which document should become evidence?',
+      description: 'Upload or link one core PDF, then convert it into a source list item, evidence package, memo draft, and reading-room document.',
+      primaryAction: 'Upload PDF',
+      secondaryAction: 'Search Issuer',
+    },
+    profiles: {
+      eyebrow: 'Analysis',
+      title: 'What do we know about this issuer?',
+      description: 'Review the issuer profile, core document coverage, ratings, debt notes, and persistent source links.',
+      primaryAction: 'Review Profile',
+      secondaryAction: 'Search Issuer',
+    },
+    library: {
+      eyebrow: 'Reports',
+      title: 'Which workspace should continue?',
+      description: 'Return to saved issuers, reports, versions, and reading-room documents without starting over.',
+      primaryAction: 'Open Saved Work',
+      secondaryAction: 'Search Issuer',
+    },
+    sources: {
+      eyebrow: 'Settings',
+      title: 'Which evidence can be trusted?',
+      description: 'Review source status, source tier, extraction options, and verification decisions for the active research run.',
+      primaryAction: 'Review Sources',
+      secondaryAction: 'Search Issuer',
+    },
+    reading: {
+      eyebrow: 'Editor',
+      title: 'What report text needs review?',
+      description: 'Edit the work product, add reviewer notes, and preserve comments before export.',
+      primaryAction: 'Back to Search',
+      secondaryAction: 'Open Reports',
+    },
+    workflows: {
+      eyebrow: 'Templates',
+      title: 'Which repeatable workflow should run?',
+      description: 'Choose a monitoring, diligence, or memo workflow and keep raw logs behind the workflow result.',
+      primaryAction: 'Run Workflow',
+      secondaryAction: 'Search Issuer',
+    },
+  };
+
+  return screens[view] ?? screens.search;
+}
+
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [query, setQuery] = useState('LADWP');
@@ -931,6 +994,7 @@ export default function HomePage() {
   const activeReportPinned = Boolean(detail && generatedReport && isFavorite('report', activeReportTitle, detail.id));
   const activeDocumentPinned = Boolean(detail && isFavorite('document', activeDocumentTitle, detail.id));
   const isBusy = isResearching || isGeneratingReport;
+  const focus = screenFocus(view);
 
   return (
     <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
@@ -953,38 +1017,11 @@ export default function HomePage() {
       <main id="main-workspace" className="main" aria-busy={isBusy}>
         <header className="workspace-header">
           <div className="workspace-title">
-            <p className="eyebrow">Research Workspace</p>
-            <h1>AI Workspace for Municipal Credit Research</h1>
-            <p className="workspace-subtitle">
-              Search issuers, analyze financial statements, generate credit memos, monitor municipal market risks, and produce evidence-backed reports.
-            </p>
-            <div className="hero-workflow-list" aria-label="Core municipal credit research workflow">
-              <span>Search issuers</span>
-              <span>Analyze financial statements</span>
-              <span>Generate professional memo</span>
-              <span>Monitor market risks</span>
-              <span>Export evidence-backed reports</span>
-            </div>
+            <p className="eyebrow">{focus.eyebrow}</p>
+            <h1>{focus.title}</h1>
+            <p className="workspace-subtitle">{focus.description}</p>
           </div>
           <div className="workspace-command">
-            <div className="workspace-kpis">
-              <div>
-                <span>Active run</span>
-                <strong>{activeRunStatus}</strong>
-              </div>
-              <div>
-                <span>Evidence items</span>
-                <strong>{activeSourceCount}</strong>
-              </div>
-              <div>
-                <span>Issuer files</span>
-                <strong>{activeProfileCount}</strong>
-              </div>
-              <div>
-                <span>Saved</span>
-                <strong>{savedRecords.length}</strong>
-              </div>
-            </div>
             <div className="header-actions">
               <span className="status-pill ready" aria-live="polite">{autosaveStatus}</span>
               <button
@@ -995,13 +1032,45 @@ export default function HomePage() {
               >
                 {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
               </button>
-              <button className="button-secondary" onClick={() => setView('search')}>Search Issuer</button>
-              <button className="button-secondary" onClick={() => setView('documents')}>Upload Documents</button>
-              <button className="button-secondary" onClick={() => void runResearch()} disabled={isResearching}>
-                {isResearching ? 'Researching...' : 'Start Research'}
-              </button>
-              <button className="button-primary" onClick={() => setView('library')}>Open Workspace</button>
+              {view !== 'search' && (
+                <button className="button-secondary" onClick={() => setView('search')}>Search Issuer</button>
+              )}
+              {view === 'search' && (
+                <button className="button-primary" onClick={() => void runResearch()} disabled={isResearching}>
+                  {isResearching ? 'Researching...' : focus.primaryAction}
+                </button>
+              )}
+              {view === 'search' && (
+                <button className="button-secondary" onClick={() => setView('documents')}>{focus.secondaryAction}</button>
+              )}
+              {view === 'reading' && (
+                <button className="button-primary" onClick={() => setView('library')}>{focus.secondaryAction}</button>
+              )}
             </div>
+            <details className="workspace-status-drawer">
+              <summary>
+                <span>Workspace status</span>
+                <strong>{activeRunStatus}</strong>
+              </summary>
+              <div className="workspace-kpis">
+                <div>
+                  <span>Active run</span>
+                  <strong>{activeRunStatus}</strong>
+                </div>
+                <div>
+                  <span>Evidence items</span>
+                  <strong>{activeSourceCount}</strong>
+                </div>
+                <div>
+                  <span>Issuer files</span>
+                  <strong>{activeProfileCount}</strong>
+                </div>
+                <div>
+                  <span>Saved</span>
+                  <strong>{savedRecords.length}</strong>
+                </div>
+              </div>
+            </details>
           </div>
         </header>
 
