@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { parseUniversalSearchQuery } from '../../lib/universal-search';
 
 type Result = {
   id: string;
@@ -114,8 +115,20 @@ const quickStarts = [
   },
 ];
 
+const searchExamples = [
+  'LADWP',
+  'Los Angeles Department of Water',
+  'California Water',
+  'Power Revenue Bond',
+  'School District',
+  'AA Utility',
+  'Issuer exposed to wildfire',
+];
+
 export function SearchPanel(props: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const universalSearch = parseUniversalSearchQuery(props.query);
+  const visibleFacets = universalSearch.facets.slice(0, 8);
   const citations = [
     ...new Set(
       props.items.flatMap((item) =>
@@ -135,13 +148,13 @@ export function SearchPanel(props: Props) {
       </div>
 
       <div className="searchbox">
-        <label className="field-label" htmlFor="issuer-search">Issuer / Entity</label>
+        <label className="field-label" htmlFor="issuer-search">Universal Search</label>
         <input
           id="issuer-search"
           value={props.query}
           onChange={(e) => props.onQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
-          placeholder="Example: LADWP, SMUD, TWDB, West Sacramento"
+          placeholder="Issuer, alias, CUSIP, ticker, sector, bond type, state, or natural language"
         />
         <button
           className="icon-button primary"
@@ -151,6 +164,34 @@ export function SearchPanel(props: Props) {
         >
           {props.isResearching ? '…' : '⌕'}
         </button>
+      </div>
+
+      <div className="universal-search-panel">
+        <div className="section-heading">
+          <div>
+            <h3>Understood query</h3>
+            <p className="muted small">{universalSearch.summary}</p>
+          </div>
+          <span className="status-pill ready">{universalSearch.intentLabel}</span>
+        </div>
+        <div className="facet-chip-row">
+          {visibleFacets.length === 0 && (
+            <span className="facet-chip muted-chip">No facets detected yet</span>
+          )}
+          {visibleFacets.map((facet) => (
+            <span key={`${facet.type}-${facet.value}`} className={`facet-chip ${facet.type}`}>
+              <strong>{facet.label}</strong>
+              {facet.value}
+            </span>
+          ))}
+        </div>
+        <div className="search-example-row" aria-label="Universal search examples">
+          {searchExamples.map((example) => (
+            <button key={example} type="button" onClick={() => props.onQuery(example)}>
+              {example}
+            </button>
+          ))}
+        </div>
       </div>
       <p className="muted small">
         Recency policy: prefer developments from the last 3 months; expand to 6 months only when no fresh issuer-specific evidence is found.

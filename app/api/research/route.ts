@@ -12,6 +12,10 @@ import {
   getPerplexityModel,
   perplexityApiKeyErrorMessage,
 } from '../../../lib/server-env';
+import {
+  parseUniversalSearchQuery,
+  universalSearchContextLines,
+} from '../../../lib/universal-search';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -825,6 +829,7 @@ function buildEvidencePackage({
   searchQueries,
   searchResults,
   issuerProfile,
+  universalSearch,
 }: {
   issuer: string;
   modeLabel: string;
@@ -834,6 +839,7 @@ function buildEvidencePackage({
   searchQueries: string[];
   searchResults: SonarSearchResult[];
   issuerProfile?: Record<string, unknown> | null;
+  universalSearch?: unknown;
 }) {
   const coverage = buildCoverageDashboardObject(searchResults);
 
@@ -863,6 +869,7 @@ function buildEvidencePackage({
       note: 'EMMA/MSRB, DebtWatch, SCO ByTheNumbers, CDIAC, and CKAN sources are prioritized through domain-targeted search unless a structured API connector is configured.',
     },
     issuer_profile_context: issuerProfile ?? null,
+    universal_search: universalSearch ?? null,
     search_queries_used: searchQueries,
     document_inventory: buildDocumentInventory(searchResults).map((item) => ({
       title: item.document,
@@ -1138,10 +1145,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Query is required.' }, { status: 400 });
   }
 
+  const universalSearch = parseUniversalSearchQuery(query);
+  const researchSubject = universalSearch.canonicalQuery || query;
+  const sourceForSearch = source === 'all'
+    ? universalSearch.recommendedSource
+    : source;
   const model = getPerplexityModel();
-  const searchQueries = buildSearchQueries(query, promptMode, customAngle, recencyScope, source);
+  const searchQueries = uniqueQueries([
+    ...universalSearch.expandedQueries.map((searchQuery) => withRecency(searchQuery, recencyScope)),
+    ...buildSearchQueries(researchSubject, promptMode, customAngle, recencyScope, sourceForSearch),
+  ]);
   const structuredResults = workflowOptions.includeLiveSearch
-    ? await structuredConnectorResults(query, source, recencyScope)
+    ? await structuredConnectorResults(researchSubject, sourceForSearch, recencyScope)
     : [];
   const searchSettled = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity
     ? await Promise.allSettled(
@@ -1187,8 +1202,10 @@ export async function POST(request: Request) {
     `Mode description: ${mode.description}`,
     `Requested output type: ${outputType}`,
     customAngle ? `Custom research angle: ${customAngle}` : null,
+    ...universalSearchContextLines(universalSearch),
     `Preferred topic filter: ${topic}`,
     `Preferred source filter: ${source}`,
+    `Universal source route: ${sourceForSearch}`,
     `Timestamp: ${timestamp}`,
     `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
     `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
@@ -1253,6 +1270,8 @@ export async function POST(request: Request) {
   const facts = [
     `${mode.label} mode`,
     `Output type requested: ${outputType}`,
+    universalSearch.summary,
+    `Universal search facets: ${universalSearch.facets.map((facet) => `${facet.label}: ${facet.value}`).join('; ') || 'none'}`,
     `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}; fallback: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
     financeFocused
       ? finalCoreFinanceDocumentsFound
@@ -1262,7 +1281,7 @@ export async function POST(request: Request) {
     ...sourceFacts(searchResults),
   ];
   const evidencePackage = buildEvidencePackage({
-    issuer: query,
+    issuer: researchSubject,
     modeLabel: mode.label,
     outputType,
     timestamp,
@@ -1270,23 +1289,25 @@ export async function POST(request: Request) {
     searchQueries,
     searchResults,
     issuerProfile,
+    universalSearch,
   });
 
   return NextResponse.json({
     record: {
       id: `research-${Date.now()}`,
       kind: 'research',
-      title: query,
+      title: researchSubject,
       topic: mode.label,
       source: 'Perplexity Sonar',
       score: 100,
-      summary: researchSummary(query, mode.label, financeFocused, finalCoreFinanceDocumentsFound, searchResults),
+      summary: researchSummary(researchSubject, mode.label, financeFocused, finalCoreFinanceDocumentsFound, searchResults),
       snippet: content,
       facts: facts.length > 0 ? facts : ['Perplexity returned an answer, but no source snippets were included.'],
       citations,
       searchResults,
       workflowInput: {
-        issuer: query,
+        issuer: researchSubject,
+        original_query: query,
         research_mode: mode.label,
         custom_prompt: customAngle || null,
         output_type: outputType,
@@ -1303,10 +1324,15 @@ export async function POST(request: Request) {
           fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
         },
         issuer_profile_used: issuerProfile ? {
-          issuer: issuerProfile.issuer ?? query,
+          issuer: issuerProfile.issuer ?? researchSubject,
           last_checked_date: issuerProfile.lastCheckedDate ?? null,
           coverage_score: issuerProfile.evidenceCoverageScore ?? null,
         } : null,
+        universal_search: {
+          intent: universalSearch.intentLabel,
+          facets: universalSearch.facets,
+          expanded_queries: universalSearch.expandedQueries,
+        },
       },
       workflowOptions,
       outputType,
