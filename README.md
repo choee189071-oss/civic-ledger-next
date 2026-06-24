@@ -10,6 +10,7 @@ A California public finance AI research workspace built with Next.js App Router.
 - Research prompt modes for issuer credit, document discovery, debt, financial performance, risk monitoring, and custom angles
 - Source tiering for public-finance evidence quality, with document inventory and coverage dashboard
 - OpenAI-powered report writer for credit memos, IC memos, rating committee memos, diligence reports, board briefings, and executive summaries
+- LlamaParse-powered document intake for ACFRs, official statements/POS, and EMMA annual reports
 - Four-step research workflow tabs: Input, Discovery, Generated Report, and Export
 - Exportable Markdown, PDF, Word-compatible `.doc`, and evidence JSON files
 - Optional Supabase-backed research library persistence with local fallback
@@ -22,6 +23,7 @@ A California public finance AI research workspace built with Next.js App Router.
 - `GET /api/reading/[id]`
 - `POST /api/research`
 - `POST /api/report`
+- `POST /api/documents/parse`
 - `POST /api/export/pdf`
 - `POST /api/library`
 
@@ -37,12 +39,17 @@ PPLX_API_KEY=your_perplexity_api_key
 PUBFIN_MODEL=sonar-pro
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+LLAMA_CLOUD_API_KEY=your_llama_cloud_api_key
+LLAMA_PARSE_TIER=agentic
+LLAMA_PARSE_TIMEOUT_MS=75000
+LLAMA_PARSE_MAX_BYTES=31457280
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 `PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results. `PERPLEXITY_API_KEY` and `PPLX_API_KEY` are accepted as aliases.
 `OPENAI_API_KEY` is used by the report writer to turn structured research packages into deliverable work products.
+`LLAMA_CLOUD_API_KEY` is used by Document Intake to parse uploaded or linked PDFs through LlamaParse. Optional LlamaExtract agent IDs can be added later with `LLAMA_EXTRACT_AGENT_ID`, `LLAMA_EXTRACT_ACFR_AGENT_ID`, `LLAMA_EXTRACT_OS_AGENT_ID`, and `LLAMA_EXTRACT_DISCLOSURE_AGENT_ID`.
 Supabase variables are optional. If omitted, saved records stay in the browser's local research library.
 
 ## Getting started
@@ -66,6 +73,7 @@ app/
     sources/         # GET /api/sources
     research/        # POST /api/research
     report/          # POST /api/report
+    documents/parse/ # POST /api/documents/parse
     library/         # POST /api/library
     export/pdf/      # POST /api/export/pdf
     result/[id]/     # GET /api/result/:id

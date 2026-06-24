@@ -10,6 +10,7 @@ import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
 import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
 import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
 import { WorkflowCenterPanel } from './components/WorkflowCenterPanel';
+import { DocumentIntakePanel } from './components/DocumentIntakePanel';
 import type {
   GeneratedReport,
   IssuerProfile,
@@ -459,6 +460,11 @@ export default function HomePage() {
     setView('reading');
   }
 
+  function openParsedDocumentReading(item: ReadingDocument) {
+    setReading(item);
+    setView('reading');
+  }
+
   function startIssuerDevelopmentScan(issuer: string, mode: string, angle: string) {
     const isGeneralCcdUpdate = /CCD_GENERAL_UPDATE/i.test(angle);
     const nextOutputType = isGeneralCcdUpdate ? 'risk-monitor' : 'research-brief';
@@ -646,6 +652,7 @@ export default function HomePage() {
             <span className="status-pill ready">Build ready</span>
             <span className="status-pill">Perplexity ready</span>
             <span className="status-pill">OpenAI writer</span>
+            <span className="status-pill">LlamaParse intake</span>
             <span className="status-pill">{savedRecords.length} saved</span>
           </div>
         </header>
@@ -728,6 +735,9 @@ export default function HomePage() {
             currentRecord={detail}
             onSaveProfile={saveIssuerProfile}
           />
+        )}
+        {view === 'documents' && (
+          <DocumentIntakePanel onOpenReading={openParsedDocumentReading} />
         )}
         {view === 'sources' && (
           <SourcesPanel

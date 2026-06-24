@@ -285,6 +285,12 @@ h3 {
   color: var(--color-green);
 }
 
+.status-pill.warning {
+  background: #fff8ec;
+  border-color: #f0d6aa;
+  color: #8a5314;
+}
+
 .searchbox {
   align-items: center;
   background: var(--color-surface);
@@ -1415,6 +1421,115 @@ h3 {
   margin-top: 0;
 }
 
+.document-intake-page {
+  margin: 0 auto;
+  max-width: 1240px;
+  width: 100%;
+}
+
+.document-intake-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+}
+
+.document-intake-grid input[type="file"] {
+  cursor: pointer;
+  padding: 9px;
+}
+
+.inline-error {
+  background: #fff1f1;
+  border: 1px solid #f3c4c4;
+  border-radius: var(--radius);
+  color: #a43a3a;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.45;
+  padding: 10px 11px;
+}
+
+.compact-note {
+  border-top: 1px solid var(--color-divider);
+  margin-top: 2px;
+  padding-top: 14px;
+}
+
+.empty-document-state {
+  align-content: center;
+  background: #ffffff;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  display: grid;
+  min-height: 320px;
+  padding: 28px;
+}
+
+.empty-document-state h3 {
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.1;
+  max-width: 720px;
+}
+
+.document-score-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-tabs {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  padding: 4px;
+}
+
+.report-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--color-muted);
+  font-weight: 800;
+  min-height: 38px;
+}
+
+.report-tabs button.active {
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+  color: var(--color-text);
+}
+
+.document-evidence-list .source-list-row {
+  grid-template-columns: 1fr;
+}
+
+.document-evidence-list .source-list-row p:last-child {
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.document-output-pre {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  max-height: 680px;
+  overflow: auto;
+  padding: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .developments-page {
   margin: 0 auto;
   max-width: 1240px;
@@ -1850,7 +1965,8 @@ h3 {
   .document-row,
   .source-list-row,
   .section-row,
-  .development-slot {
+  .development-slot,
+  .document-intake-grid {
     align-items: start;
     grid-template-columns: 1fr;
   }
