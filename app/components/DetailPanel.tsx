@@ -30,6 +30,12 @@ type Props = {
   onOpenReading: () => void;
   onSave: () => void;
   isSaved: boolean;
+  isIssuerPinned: boolean;
+  isReportPinned: boolean;
+  isDocumentPinned: boolean;
+  onToggleIssuerPin: () => void;
+  onToggleReportPin: () => void;
+  onToggleDocumentPin: () => void;
 };
 
 const reportTemplates = [
@@ -794,6 +800,12 @@ export function DetailPanel({
   onOpenReading,
   onSave,
   isSaved,
+  isIssuerPinned,
+  isReportPinned,
+  isDocumentPinned,
+  onToggleIssuerPin,
+  onToggleReportPin,
+  onToggleDocumentPin,
 }: Props) {
   const [activeTab, setActiveTab] = useState('discovery');
   const [copyStatus, setCopyStatus] = useState('');
@@ -1022,6 +1034,15 @@ export function DetailPanel({
               <button className="button-secondary" onClick={() => setActiveTab('report')}>Draft Report</button>
               <button className="button-secondary" onClick={onOpenReading}>Open Editor</button>
               <button className="button-secondary" onClick={onSave}>{isSaved ? 'Saved to Library' : 'Save Workspace'}</button>
+              <button className="button-secondary pin-button" onClick={onToggleIssuerPin}>
+                {isIssuerPinned ? 'Issuer Pinned' : 'Pin Issuer'}
+              </button>
+              <button className="button-secondary pin-button" onClick={onToggleReportPin} disabled={!generatedReport}>
+                {isReportPinned ? 'Report Pinned' : 'Pin Report'}
+              </button>
+              <button className="button-secondary pin-button" onClick={onToggleDocumentPin}>
+                {isDocumentPinned ? 'Document Pinned' : 'Pin Document'}
+              </button>
             </div>
           </article>
         </div>

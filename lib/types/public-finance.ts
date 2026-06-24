@@ -129,3 +129,21 @@ export type ResearchRecord = {
 };
 
 export type SourceStatusMap = Record<string, string>;
+
+export type RecentWorkspaceItem = {
+  id: string;
+  issuer: string;
+  title: string;
+  subtitle?: string;
+  recordId?: string;
+  lastOpenedAt: string;
+};
+
+export type FavoriteItem = {
+  id: string;
+  type: 'issuer' | 'report' | 'document';
+  title: string;
+  subtitle?: string;
+  recordId?: string;
+  createdAt: string;
+};

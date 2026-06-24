@@ -19,9 +19,11 @@ import {
 } from '../lib/issuer-profile-database';
 import type {
   GeneratedReport,
+  FavoriteItem,
   IssuerProfile,
   ReadingAnnotation,
   ReadingDocument,
+  RecentWorkspaceItem,
   ReportVersion,
   ResearchRecord,
   SourceCatalogItem,
@@ -37,6 +39,17 @@ const defaultWorkflowOptions = {
   includeCoverageDashboard: true,
   includeMissingData: true,
   includeExport: true,
+};
+
+const STORAGE_KEYS = {
+  savedRecords: 'civic-ledger-saved-records',
+  runStatuses: 'civic-ledger-run-statuses',
+  sourceStatuses: 'civic-ledger-source-statuses',
+  issuerProfiles: 'civic-ledger-issuer-profiles',
+  reportVersions: 'civic-ledger-report-versions',
+  readingAnnotations: 'civic-ledger-reading-annotations',
+  recentWorkspaces: 'civic-ledger-recent-workspaces',
+  favorites: 'civic-ledger-favorites',
 };
 
 function normalizeRecord(item: Partial<ResearchRecord> & Record<string, unknown>): ResearchRecord {
@@ -111,6 +124,24 @@ function replaceSection(content: string, sectionTitle: string, replacement: stri
   ].join('\n').trim();
 }
 
+function recordIssuer(record: Partial<ResearchRecord> | null | undefined) {
+  return String(record?.workflowInput?.issuer || record?.title || 'Untitled issuer');
+}
+
+function reportTitleFor(record: Partial<ResearchRecord> | null | undefined, report: GeneratedReport | null | undefined) {
+  return report?.title || record?.generatedReport?.title || `${recordIssuer(record)} report`;
+}
+
+function favoriteIdFor(type: FavoriteItem['type'], title: string, recordId?: string) {
+  return [type, recordId || title].join(':').toLowerCase().replace(/\s+/g, '-');
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  return target.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [query, setQuery] = useState('LADWP');
@@ -129,6 +160,8 @@ export default function HomePage() {
   const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
   const [reading, setReading] = useState<ReadingDocument | null>(null);
   const [savedRecords, setSavedRecords] = useState<ResearchRecord[]>([]);
+  const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspaceItem[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [runStatuses, setRunStatuses] = useState<Record<string, string>>({});
   const [sourceStatuses, setSourceStatuses] = useState<SourceStatusMap>({});
   const [issuerProfiles, setIssuerProfiles] = useState<Record<string, IssuerProfile>>({});
@@ -139,6 +172,7 @@ export default function HomePage() {
   const [researchError, setResearchError] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState('Autosave ready');
 
   async function loadSearch(
     nextQuery = query,
@@ -177,16 +211,20 @@ export default function HomePage() {
   async function loadDetail(id: string) {
     const existing = results.find((item) => item.id === id);
     if (existing) {
-      setDetail(normalizeRecord(existing));
+      const normalized = normalizeRecord(existing);
+      setDetail(normalized);
       setGeneratedReport(existing.generatedReport ?? null);
+      touchRecentWorkspace(normalized);
       return;
     }
 
     const res = await fetch(`/api/result/${id}`);
     if (!res.ok) return;
     const payload = await res.json();
-    setDetail(normalizeRecord(payload));
+    const normalized = normalizeRecord(payload);
+    setDetail(normalized);
     setGeneratedReport(payload.generatedReport ?? null);
+    touchRecentWorkspace(normalized);
   }
 
   async function loadReading(id: string) {
@@ -194,6 +232,82 @@ export default function HomePage() {
     const payload = await res.json();
     setReading(payload);
     setView('reading');
+  }
+
+  function touchRecentWorkspace(record: ResearchRecord, subtitle?: string) {
+    const now = new Date().toISOString();
+    const issuer = recordIssuer(record);
+    const item: RecentWorkspaceItem = {
+      id: profileKey(issuer),
+      issuer,
+      title: record.title,
+      subtitle: subtitle || record.researchModeLabel || record.topic || record.source,
+      recordId: record.id,
+      lastOpenedAt: now,
+    };
+
+    setRecentWorkspaces((items) => [
+      item,
+      ...items.filter((existing) => existing.id !== item.id && existing.recordId !== item.recordId),
+    ].slice(0, 10));
+  }
+
+  function autosaveRecord(
+    record: ResearchRecord,
+    report: GeneratedReport | null | undefined = record.generatedReport,
+    reason = 'Autosaved',
+    remote = false
+  ) {
+    const now = new Date().toISOString();
+
+    setSavedRecords((records) => {
+      const existing = records.find((item) => item.id === record.id);
+      const nextReport = report ?? record.generatedReport ?? existing?.generatedReport ?? null;
+      const nextRecord = {
+        ...existing,
+        ...record,
+        generatedReport: nextReport,
+        workflowStatus: runStatuses[record.id] ?? record.workflowStatus ?? existing?.workflowStatus ?? defaultRunStatus(record),
+        reportVersions: reportVersions[record.id] ?? existing?.reportVersions ?? [],
+        annotations: readingAnnotations[record.id] ?? existing?.annotations ?? [],
+        savedAt: now,
+      };
+      const next = [
+        nextRecord,
+        ...records.filter((item) => item.id !== record.id),
+      ].slice(0, 16);
+
+      window.localStorage.setItem(STORAGE_KEYS.savedRecords, JSON.stringify(next));
+      return next;
+    });
+
+    touchRecentWorkspace(record, report?.templateLabel || record.researchModeLabel || record.topic);
+    setAutosaveStatus(`${reason} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+
+    if (remote) {
+      fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ record, report }),
+      }).catch((error) => {
+        console.warn('[library] remote autosave failed, kept local copy:', error);
+      });
+    }
+  }
+
+  function toggleFavorite(item: Omit<FavoriteItem, 'id' | 'createdAt'>) {
+    const id = favoriteIdFor(item.type, item.title, item.recordId);
+
+    setFavorites((items) => {
+      const exists = items.some((favorite) => favorite.id === id);
+      if (exists) return items.filter((favorite) => favorite.id !== id);
+      return [{ ...item, id, createdAt: new Date().toISOString() }, ...items].slice(0, 16);
+    });
+  }
+
+  function isFavorite(type: FavoriteItem['type'], title: string, recordId?: string) {
+    const id = favoriteIdFor(type, title, recordId);
+    return favorites.some((item) => item.id === id);
   }
 
   async function runResearch(overrides?: {
@@ -269,6 +383,7 @@ export default function HomePage() {
       }));
       setRunStatuses((statuses) => ({ ...statuses, [researchRecord.id]: researchRecord.workflowStatus }));
       setTab('results');
+      autosaveRecord(researchRecord, null, 'Research autosaved', true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Live research failed.';
       setResearchError(message);
@@ -298,12 +413,14 @@ export default function HomePage() {
       }
 
       const report = payload.report;
+      const nextDetail = { ...detail, generatedReport: report, workflowStatus: 'Ready for Review' };
       setGeneratedReport(report);
       setRunStatuses((statuses) => ({ ...statuses, [detail.id]: 'Ready for Review' }));
       setDetail((current) => current ? { ...current, generatedReport: report, workflowStatus: 'Ready for Review' } : current);
       setResults((items) =>
         items.map((item) => item.id === detail.id ? { ...item, generatedReport: report, workflowStatus: 'Ready for Review' } : item)
       );
+      autosaveRecord(nextDetail, report, 'Report autosaved', true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Report generation failed.';
       setReportError(message);
@@ -330,9 +447,10 @@ export default function HomePage() {
     setResults((items) => items.map((item) => item.id === detail.id ? { ...item, workflowStatus: status } : item));
     setSavedRecords((records) => {
       const next = records.map((record) => record.id === detail.id ? { ...record, workflowStatus: status } : record);
-      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      window.localStorage.setItem(STORAGE_KEYS.savedRecords, JSON.stringify(next));
       return next;
     });
+    setAutosaveStatus(`Status autosaved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
   }
 
   function updateSourceStatus(key: string, status: string) {
@@ -359,6 +477,10 @@ export default function HomePage() {
     setGeneratedReport(nextReport);
     setDetail((current) => current ? { ...current, generatedReport: nextReport } : current);
     setResults((items) => items.map((item) => item.id === detail?.id ? { ...item, generatedReport: nextReport } : item));
+
+    if (detail) {
+      autosaveRecord({ ...detail, generatedReport: nextReport }, nextReport, 'Report edit autosaved');
+    }
   }
 
   function saveReportVersion() {
@@ -381,9 +503,10 @@ export default function HomePage() {
       const next = records.map((record) => record.id === detail.id
         ? { ...record, reportVersions: [version, ...(record.reportVersions ?? [])].slice(0, 12) }
         : record);
-      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      window.localStorage.setItem(STORAGE_KEYS.savedRecords, JSON.stringify(next));
       return next;
     });
+    setAutosaveStatus(`Version saved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
   }
 
   async function regenerateReportSection(sectionTitle: string, currentSection: string) {
@@ -427,6 +550,8 @@ export default function HomePage() {
 
     if (generatedReport && reading?.id === generatedReport.id) {
       updateReportContent(content);
+    } else {
+      setAutosaveStatus(`Editor autosaved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
     }
   }
 
@@ -441,9 +566,10 @@ export default function HomePage() {
       const next = records.map((record) => record.id === key
         ? { ...record, annotations: [annotation, ...(record.annotations ?? [])] }
         : record);
-      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      window.localStorage.setItem(STORAGE_KEYS.savedRecords, JSON.stringify(next));
       return next;
     });
+    setAutosaveStatus(`Annotation autosaved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
   }
 
   function deleteReadingAnnotation(annotationId: string) {
@@ -457,9 +583,10 @@ export default function HomePage() {
       const next = records.map((record) => record.id === key
         ? { ...record, annotations: (record.annotations ?? []).filter((annotation) => annotation.id !== annotationId) }
         : record);
-      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
+      window.localStorage.setItem(STORAGE_KEYS.savedRecords, JSON.stringify(next));
       return next;
     });
+    setAutosaveStatus(`Annotation autosaved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
   }
 
   function openLibraryRecord(record: ResearchRecord) {
@@ -471,6 +598,7 @@ export default function HomePage() {
     if (record.reportVersions?.length) {
       setReportVersions((versions) => ({ ...versions, [normalized.id]: record.reportVersions }));
     }
+    touchRecentWorkspace(normalized);
     setView('search');
   }
 
@@ -488,11 +616,51 @@ export default function HomePage() {
       title: report?.title || `Reading: ${record.title}`,
       body: [report?.content || record.snippet || record.summary || ''],
     });
+    touchRecentWorkspace(normalizeRecord(record), report?.templateLabel || 'Reading room');
     setView('reading');
+  }
+
+  function findWorkspaceRecord(recordId?: string, title?: string) {
+    return [...savedRecords, ...results].find((record) =>
+      (recordId && record.id === recordId) ||
+      (title && (record.title === title || recordIssuer(record) === title))
+    );
+  }
+
+  function openRecentWorkspace(item: RecentWorkspaceItem) {
+    const record = findWorkspaceRecord(item.recordId, item.issuer || item.title);
+
+    if (record) {
+      openLibraryRecord(record);
+      return;
+    }
+
+    setQuery(item.issuer || item.title);
+    setView('search');
+    void loadSearch(item.issuer || item.title);
+  }
+
+  function openFavorite(item: FavoriteItem) {
+    const record = findWorkspaceRecord(item.recordId, item.title);
+
+    if (item.type === 'document' && record) {
+      openLibraryReading(record);
+      return;
+    }
+
+    if (record) {
+      openLibraryRecord(record);
+      return;
+    }
+
+    setQuery(item.title);
+    setView('search');
+    void loadSearch(item.title);
   }
 
   function openParsedDocumentReading(item: ReadingDocument) {
     setReading(item);
+    setAutosaveStatus(`Document opened ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
     setView('reading');
   }
 
@@ -521,6 +689,7 @@ export default function HomePage() {
     }));
     setTab('results');
     setReportError(null);
+    autosaveRecord({ ...record, generatedReport: workflow.report }, workflow.report, 'Document workflow autosaved', true);
 
     if (open) {
       setView('search');
@@ -592,6 +761,7 @@ export default function HomePage() {
         title: generatedReport.title,
         body: [generatedReport.content],
       });
+      touchRecentWorkspace(detail, generatedReport.templateLabel || 'Reading room');
       setView('reading');
       return;
     }
@@ -607,6 +777,7 @@ export default function HomePage() {
           ...(detail.facts ?? []),
         ].filter(Boolean),
       });
+      touchRecentWorkspace(detail, 'Reading room');
       setView('reading');
       return;
     }
@@ -619,32 +790,7 @@ export default function HomePage() {
   function saveRecord() {
     if (!detail) return;
 
-    fetch('/api/library', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ record: detail, report: generatedReport }),
-    }).catch((error) => {
-      console.warn('[library] remote save failed, kept local copy:', error);
-    });
-
-    setSavedRecords((records) => {
-      const nextRecord = {
-        ...detail,
-        generatedReport,
-        workflowStatus: runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail),
-        reportVersions: reportVersions[detail.id] ?? [],
-        annotations: readingAnnotations[detail.id] ?? [],
-        savedAt: new Date().toISOString()
-      };
-      const next = [
-        nextRecord,
-        ...records.filter((record) => record.id !== detail.id)
-      ].slice(0, 8);
-
-      window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
-      return next;
-    });
-
+    autosaveRecord({ ...detail, generatedReport }, generatedReport, 'Workspace saved', true);
     setIssuerProfiles((profiles) => ({
       ...profiles,
       [profileKey(detail.title)]: buildIssuerProfileFromRecord(
@@ -656,29 +802,37 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('civic-ledger-saved-records');
+    const stored = window.localStorage.getItem(STORAGE_KEYS.savedRecords);
     if (stored) {
       setSavedRecords(JSON.parse(stored));
     }
-    const storedRunStatuses = window.localStorage.getItem('civic-ledger-run-statuses');
+    const storedRunStatuses = window.localStorage.getItem(STORAGE_KEYS.runStatuses);
     if (storedRunStatuses) {
       setRunStatuses(JSON.parse(storedRunStatuses));
     }
-    const storedSourceStatuses = window.localStorage.getItem('civic-ledger-source-statuses');
+    const storedSourceStatuses = window.localStorage.getItem(STORAGE_KEYS.sourceStatuses);
     if (storedSourceStatuses) {
       setSourceStatuses(JSON.parse(storedSourceStatuses));
     }
-    const storedIssuerProfiles = window.localStorage.getItem('civic-ledger-issuer-profiles');
+    const storedIssuerProfiles = window.localStorage.getItem(STORAGE_KEYS.issuerProfiles);
     if (storedIssuerProfiles) {
       setIssuerProfiles(JSON.parse(storedIssuerProfiles));
     }
-    const storedVersions = window.localStorage.getItem('civic-ledger-report-versions');
+    const storedVersions = window.localStorage.getItem(STORAGE_KEYS.reportVersions);
     if (storedVersions) {
       setReportVersions(JSON.parse(storedVersions));
     }
-    const storedAnnotations = window.localStorage.getItem('civic-ledger-reading-annotations');
+    const storedAnnotations = window.localStorage.getItem(STORAGE_KEYS.readingAnnotations);
     if (storedAnnotations) {
       setReadingAnnotations(JSON.parse(storedAnnotations));
+    }
+    const storedRecentWorkspaces = window.localStorage.getItem(STORAGE_KEYS.recentWorkspaces);
+    if (storedRecentWorkspaces) {
+      setRecentWorkspaces(JSON.parse(storedRecentWorkspaces));
+    }
+    const storedFavorites = window.localStorage.getItem(STORAGE_KEYS.favorites);
+    if (storedFavorites) {
+      setFavorites(JSON.parse(storedFavorites));
     }
     setStorageReady(true);
     loadSources();
@@ -687,38 +841,97 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem('civic-ledger-run-statuses', JSON.stringify(runStatuses));
+    window.localStorage.setItem(STORAGE_KEYS.runStatuses, JSON.stringify(runStatuses));
   }, [runStatuses, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem('civic-ledger-source-statuses', JSON.stringify(sourceStatuses));
+    window.localStorage.setItem(STORAGE_KEYS.sourceStatuses, JSON.stringify(sourceStatuses));
   }, [sourceStatuses, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem('civic-ledger-issuer-profiles', JSON.stringify(issuerProfiles));
+    window.localStorage.setItem(STORAGE_KEYS.issuerProfiles, JSON.stringify(issuerProfiles));
   }, [issuerProfiles, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem('civic-ledger-report-versions', JSON.stringify(reportVersions));
+    window.localStorage.setItem(STORAGE_KEYS.reportVersions, JSON.stringify(reportVersions));
   }, [reportVersions, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
-    window.localStorage.setItem('civic-ledger-reading-annotations', JSON.stringify(readingAnnotations));
+    window.localStorage.setItem(STORAGE_KEYS.readingAnnotations, JSON.stringify(readingAnnotations));
   }, [readingAnnotations, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem(STORAGE_KEYS.recentWorkspaces, JSON.stringify(recentWorkspaces));
+  }, [recentWorkspaces, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites));
+  }, [favorites, storageReady]);
+
+  useEffect(() => {
+    function focusSearch(select = false) {
+      setView('search');
+      window.setTimeout(() => {
+        const input = document.getElementById('issuer-search') as HTMLInputElement | null;
+        input?.focus();
+        if (select) input?.select();
+      }, 0);
+    }
+
+    function handleShortcut(event: KeyboardEvent) {
+      const key = event.key.toLowerCase();
+
+      if (event.key === '/' && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        focusSearch();
+        return;
+      }
+
+      if (event.ctrlKey && key === 'k' && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        focusSearch(true);
+        return;
+      }
+
+      if (event.metaKey && event.key === 'Enter') {
+        event.preventDefault();
+        if (!isResearching) void runResearch();
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [isResearching, query, topic, source, sort, promptMode, customAngle, reportTemplate, workflowOptions, issuerProfiles]);
 
   const activeRunStatus = detail ? runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail) : 'No active run';
   const activeSourceCount = detail
     ? (detail.documentInventory?.length ?? 0) + (detail.searchResults?.length ?? 0) + (detail.citations?.length ?? 0)
     : sources.length;
   const activeProfileCount = Object.keys(issuerProfiles).length;
+  const activeIssuerTitle = detail ? recordIssuer(detail) : '';
+  const activeReportTitle = detail ? reportTitleFor(detail, generatedReport) : '';
+  const activeDocumentTitle = detail ? generatedReport?.title || `Reading: ${detail.title}` : '';
+  const activeIssuerPinned = Boolean(detail && isFavorite('issuer', activeIssuerTitle, detail.id));
+  const activeReportPinned = Boolean(detail && generatedReport && isFavorite('report', activeReportTitle, detail.id));
+  const activeDocumentPinned = Boolean(detail && isFavorite('document', activeDocumentTitle, detail.id));
 
   return (
     <div className="app-shell">
-      <Sidebar current={view} onChange={setView} savedRecords={savedRecords} />
+      <Sidebar
+        current={view}
+        onChange={setView}
+        savedRecords={savedRecords}
+        recentWorkspaces={recentWorkspaces}
+        favorites={favorites}
+        onOpenRecent={openRecentWorkspace}
+        onOpenFavorite={openFavorite}
+      />
       <main className="main">
         <header className="workspace-header">
           <div className="workspace-title">
@@ -755,6 +968,7 @@ export default function HomePage() {
               </div>
             </div>
             <div className="header-actions">
+              <span className="status-pill ready">{autosaveStatus}</span>
               <button className="button-secondary" onClick={() => setView('search')}>Search Issuer</button>
               <button className="button-secondary" onClick={() => setView('documents')}>Upload Documents</button>
               <button className="button-secondary" onClick={() => void runResearch()} disabled={isResearching}>
@@ -810,6 +1024,36 @@ export default function HomePage() {
               onOpenReading={openCurrentReading}
               onSave={saveRecord}
               isSaved={Boolean(detail && savedRecords.some((record) => record.id === detail.id))}
+              isIssuerPinned={activeIssuerPinned}
+              isReportPinned={activeReportPinned}
+              isDocumentPinned={activeDocumentPinned}
+              onToggleIssuerPin={() => {
+                if (!detail) return;
+                toggleFavorite({
+                  type: 'issuer',
+                  title: activeIssuerTitle,
+                  subtitle: detail.researchModeLabel || detail.topic || detail.source,
+                  recordId: detail.id,
+                });
+              }}
+              onToggleReportPin={() => {
+                if (!detail || !generatedReport) return;
+                toggleFavorite({
+                  type: 'report',
+                  title: activeReportTitle,
+                  subtitle: generatedReport.templateLabel || reportTemplate,
+                  recordId: detail.id,
+                });
+              }}
+              onToggleDocumentPin={() => {
+                if (!detail) return;
+                toggleFavorite({
+                  type: 'document',
+                  title: activeDocumentTitle,
+                  subtitle: generatedReport ? 'Reading room report' : detail.source,
+                  recordId: detail.id,
+                });
+              }}
             />
           </section>
         )}

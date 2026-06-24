@@ -2,9 +2,21 @@ type Props = {
   current: string;
   onChange: (view: string) => void;
   savedRecords: any[];
+  recentWorkspaces: any[];
+  favorites: any[];
+  onOpenRecent: (item: any) => void;
+  onOpenFavorite: (item: any) => void;
 };
 
-export function Sidebar({ current, onChange, savedRecords }: Props) {
+export function Sidebar({
+  current,
+  onChange,
+  savedRecords,
+  recentWorkspaces,
+  favorites,
+  onOpenRecent,
+  onOpenFavorite,
+}: Props) {
   const primaryViews = [
     { id: 'search', label: 'Search', icon: '⌕' },
     { id: 'documents', label: 'Documents', icon: '▧' },
@@ -56,6 +68,48 @@ export function Sidebar({ current, onChange, savedRecords }: Props) {
             </button>
           ))}
         </nav>
+      </section>
+
+      <section className="sidebar-section">
+        <div className="section-heading">
+          <span>Favorites</span>
+          <span className="count">{favorites.length}</span>
+        </div>
+        <div className="saved-list">
+          {favorites.length === 0 && (
+            <p className="muted small">Pin issuers, reports, or documents for faster access.</p>
+          )}
+          {favorites.slice(0, 6).map((item) => (
+            <button key={item.id} type="button" className="saved-item sidebar-action-item" onClick={() => onOpenFavorite(item)}>
+              <span className={`saved-dot favorite-dot ${item.type}`} />
+              <div>
+                <strong>{item.title}</strong>
+                <p className="muted small">{item.type} · {item.subtitle || 'Pinned workspace item'}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="sidebar-section">
+        <div className="section-heading">
+          <span>Recent workspace</span>
+          <span className="count">{recentWorkspaces.length}</span>
+        </div>
+        <div className="saved-list">
+          {recentWorkspaces.length === 0 && (
+            <p className="muted small">Recent issuers will appear automatically.</p>
+          )}
+          {recentWorkspaces.slice(0, 5).map((item) => (
+            <button key={item.id} type="button" className="saved-item sidebar-action-item" onClick={() => onOpenRecent(item)}>
+              <span className="saved-dot recent-dot" />
+              <div>
+                <strong>{item.issuer || item.title}</strong>
+                <p className="muted small">{item.subtitle || item.title}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="sidebar-section">

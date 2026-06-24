@@ -318,6 +318,11 @@ export function SearchPanel(props: Props) {
           {props.isResearching ? '…' : '⌕'}
         </button>
       </div>
+      <div className="shortcut-strip" aria-label="Keyboard shortcuts">
+        <span><kbd>/</kbd> Search</span>
+        <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick Search</span>
+        <span><kbd>⌘</kbd><kbd>Enter</kbd> Run Research</span>
+      </div>
 
       <div className="universal-search-panel">
         <div className="section-heading">
