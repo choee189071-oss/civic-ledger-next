@@ -26,6 +26,7 @@ export type GeneratedReport = {
   evidenceCoverageScore?: number;
   researchWorkspace?: Record<string, unknown>;
   issuerDashboard?: Record<string, unknown>;
+  structuredAnswer?: Record<string, unknown>;
 };
 
 export type ReportVersion = {
@@ -107,6 +108,7 @@ export type ResearchRecord = {
   evidenceCoverageScore?: number;
   researchWorkspace?: Record<string, unknown>;
   issuerDashboard?: Record<string, unknown>;
+  structuredAnswer?: Record<string, unknown>;
   documentDiagnostics?: Record<string, unknown>;
   retrievalDiagnostics?: Record<string, unknown>;
   failureClassification?: Record<string, unknown>;

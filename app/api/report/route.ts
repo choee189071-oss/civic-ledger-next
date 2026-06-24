@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 import { buildResearchWorkspace } from '../../../lib/research-workspace';
 import { buildIssuerDashboard } from '../../../lib/issuer-dashboard';
+import { buildStructuredAnswer } from '../../../lib/ai-experience';
 
 export const runtime = 'nodejs';
 
@@ -601,6 +602,10 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
   return [
     'You are Civic Ledger Writer, a senior public finance analyst and report editor.',
     'Transform the supplied structured research package into a polished deliverable report.',
+    'Never return long paragraphs. Use short sections, bullets, and tables.',
+    'Every report must make Summary, Analysis, Evidence, Recommendations, Confidence, and Suggested Follow-up Questions easy to identify either as explicit sections or as clearly labeled blocks.',
+    'Confidence must be High, Medium, or Low with a brief explanation.',
+    'Suggested Follow-up Questions must recommend relevant next questions after the answer.',
     'Preserve useful detail: keep important dollar amounts, ratios, dates, document names, source tiers, issuer/system distinctions, and caveats.',
     'Preserve the recency policy from the research package. Prefer developments inside the 3-month window; use the 6-month fallback only when no 3-month evidence exists.',
     'Never describe older evidence as recent. Label it as older context, and explain whether it is still structurally relevant.',
@@ -723,6 +728,13 @@ export async function POST(request: Request) {
   const evidenceEngine = buildEvidenceEngine(record, content || '');
   const researchWorkspace = buildResearchWorkspace(record, content || '', evidenceEngine);
   const issuerDashboard = buildIssuerDashboard(record, content || '', evidenceEngine);
+  const structuredAnswer = buildStructuredAnswer({
+    record,
+    content: content || '',
+    evidenceEngine,
+    researchWorkspace,
+    issuerDashboard,
+  });
 
   return NextResponse.json({
     report: {
@@ -741,6 +753,7 @@ export async function POST(request: Request) {
       evidenceCoverageScore: evidenceEngine.coveragePercent,
       researchWorkspace,
       issuerDashboard,
+      structuredAnswer,
     },
   });
 }

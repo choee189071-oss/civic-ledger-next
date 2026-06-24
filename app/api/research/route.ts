@@ -27,6 +27,7 @@ import {
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 import { buildResearchWorkspace } from '../../../lib/research-workspace';
 import { buildIssuerDashboard } from '../../../lib/issuer-dashboard';
+import { buildStructuredAnswer } from '../../../lib/ai-experience';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -977,8 +978,19 @@ async function structuredConnectorResults(issuer: string, source: string, recenc
 }
 
 function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean, recencyScope: RecencyScope) {
+  const aiExperienceRules = [
+    'AI EXPERIENCE FORMAT:',
+    'Never return long paragraphs.',
+    'Always use these sections in this order: Summary, Analysis, Evidence, Recommendations, Confidence, Suggested Follow-up Questions.',
+    'Use short bullets under every section.',
+    'Confidence must be exactly High, Medium, or Low, followed by a one-sentence explanation.',
+    'Suggested Follow-up Questions must include relevant next questions the user can ask.',
+    '',
+  ].join('\n');
+
   if (!financeFocused) {
     return [
+      aiExperienceRules,
       'Format the answer as a short research memo with: Current answer, Evidence, Gaps, Next step.',
       `Use the preferred 3-month window (${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}) first, then the 6-month fallback (${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}) only if needed.`,
       noRecentInfoGuide(),
@@ -988,6 +1000,7 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
   const modeLabel = PROMPT_MODE_OPTIONS[promptMode].label;
 
   return [
+    aiExperienceRules,
     'Use this exact finance-focused structure:',
     '1. Recency Discipline',
     `- Preferred window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}.`,
@@ -1393,11 +1406,33 @@ export async function POST(request: Request) {
     coverageDashboard,
     evidencePackage,
   }, content, evidenceEngine);
+  const structuredAnswer = buildStructuredAnswer({
+    record: {
+      title: researchSubject,
+      summary: researchSummary(researchSubject, mode.label, financeFocused, finalCoreFinanceDocumentsFound, searchResults),
+      facts,
+      citations,
+      searchResults,
+      documentInventory,
+      coverageDashboard,
+      evidencePackage,
+      documentDiagnostics,
+      failureClassification,
+      financeFocused,
+      coreFinanceDocumentsFound: finalCoreFinanceDocumentsFound,
+      relatedQuestions: sonar.related_questions ?? [],
+    },
+    content,
+    evidenceEngine,
+    researchWorkspace,
+    issuerDashboard,
+  });
   const enrichedEvidencePackage = {
     ...evidencePackage,
     evidence_engine: evidenceEngine,
     research_workspace: researchWorkspace,
     issuer_dashboard: issuerDashboard,
+    structured_answer: structuredAnswer,
   };
 
   return NextResponse.json({
@@ -1449,6 +1484,7 @@ export async function POST(request: Request) {
       evidenceCoverageScore: evidenceEngine.coveragePercent,
       researchWorkspace,
       issuerDashboard,
+      structuredAnswer,
       documentDiagnostics,
       retrievalDiagnostics,
       failureClassification,

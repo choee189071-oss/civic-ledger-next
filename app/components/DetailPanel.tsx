@@ -11,6 +11,7 @@ import {
 import { buildEvidenceEngine, type EvidenceCoverage } from '../../lib/evidence-engine';
 import { buildResearchWorkspace, type ResearchWorkspace } from '../../lib/research-workspace';
 import { buildIssuerDashboard, type IssuerDashboard } from '../../lib/issuer-dashboard';
+import { buildStructuredAnswer, type StructuredAnswer } from '../../lib/ai-experience';
 
 type Props = {
   detail: any;
@@ -378,6 +379,39 @@ function issuerDashboardMarkdown(dashboard: IssuerDashboard | null | undefined) 
   ].join('\n');
 }
 
+function structuredAnswerMarkdown(answer: StructuredAnswer | null | undefined) {
+  if (!answer) {
+    return [
+      '## Structured Answer',
+      '',
+      'Structured answer was not calculated for this export.',
+    ].join('\n');
+  }
+
+  return [
+    '## Structured Answer',
+    '',
+    '### Summary',
+    markdownList(answer.summary),
+    '',
+    '### Analysis',
+    markdownList(answer.analysis),
+    '',
+    '### Evidence',
+    markdownList(answer.evidence),
+    '',
+    '### Recommendations',
+    markdownList(answer.recommendations),
+    '',
+    '### Confidence',
+    '',
+    `**${answer.confidence.level}:** ${mdCell(answer.confidence.explanation)}`,
+    '',
+    '### Suggested Follow-up Questions',
+    markdownList(answer.suggestedFollowUps),
+  ].join('\n');
+}
+
 function markdownFor(
   detail: any,
   generatedReport: any | null,
@@ -391,6 +425,7 @@ function markdownFor(
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
   const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
   const issuerDashboard = issuerDashboardFor(detail, generatedReport, evidencePackage, evidenceEngine);
+  const structuredAnswer = structuredAnswerFor(detail, generatedReport, evidencePackage, evidenceEngine, researchWorkspace, issuerDashboard);
 
   return [
     `# ${title}`,
@@ -398,6 +433,8 @@ function markdownFor(
     `Generated: ${generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString()}`,
     '',
     exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate, evidenceEngine),
+    '',
+    structuredAnswerMarkdown(structuredAnswer),
     '',
     researchWorkspaceMarkdown(researchWorkspace),
     '',
@@ -476,6 +513,34 @@ function issuerDashboardFor(
     ...detail,
     evidencePackage,
   }, generatedReport?.content || detail?.snippet || '', evidenceEngine);
+}
+
+function structuredAnswerFor(
+  detail: any,
+  generatedReport: any | null,
+  evidencePackage: any,
+  evidenceEngine: EvidenceCoverage,
+  researchWorkspace: ResearchWorkspace,
+  issuerDashboard: IssuerDashboard
+): StructuredAnswer {
+  const packaged = generatedReport?.structuredAnswer ||
+    detail?.structuredAnswer ||
+    evidencePackage?.structured_answer;
+
+  if (packaged?.summary && packaged?.analysis && packaged?.evidence && packaged?.recommendations && packaged?.confidence && !generatedReport?.editedAt) {
+    return packaged as StructuredAnswer;
+  }
+
+  return buildStructuredAnswer({
+    record: {
+      ...detail,
+      evidencePackage,
+    },
+    content: generatedReport?.content || detail?.snippet || '',
+    evidenceEngine,
+    researchWorkspace,
+    issuerDashboard,
+  });
 }
 
 function templateLabel(value: string) {
@@ -756,6 +821,7 @@ export function DetailPanel({
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
   const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
   const issuerDashboard = issuerDashboardFor(detail, generatedReport, evidencePackage, evidenceEngine);
+  const structuredAnswer = structuredAnswerFor(detail, generatedReport, evidencePackage, evidenceEngine, researchWorkspace, issuerDashboard);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
   const documentDiagnostics = documentDiagnosticsFor(detail, evidencePackage);
@@ -799,6 +865,7 @@ export function DetailPanel({
         evidence_engine: evidenceEngine,
         research_workspace: researchWorkspace,
         issuer_dashboard: issuerDashboard,
+        structured_answer: structuredAnswer,
       }, null, 2),
       `${slug(detail.title || 'issuer')}_${slug(detail.researchModeLabel || 'research')}_evidence_package_${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8'
@@ -980,6 +1047,63 @@ export function DetailPanel({
 
       {activeTab === 'discovery' && (
         <>
+          <section className="answer-section structured-answer-section">
+            <div className="section-heading">
+              <div>
+                <h3>Structured answer</h3>
+                <p className="muted small">Short answer format for review: Summary, Analysis, Evidence, Recommendations.</p>
+              </div>
+              <span className={`confidence-badge ${structuredAnswer.confidence.level.toLowerCase()}`}>
+                {structuredAnswer.confidence.level}
+              </span>
+            </div>
+            <div className="structured-answer-grid">
+              <article>
+                <span>Summary</span>
+                {structuredAnswer.summary.slice(0, 4).map((item, index) => (
+                  <p key={`structured-summary-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Analysis</span>
+                {structuredAnswer.analysis.slice(0, 5).map((item, index) => (
+                  <p key={`structured-analysis-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Evidence</span>
+                {structuredAnswer.evidence.slice(0, 5).map((item, index) => (
+                  <p key={`structured-evidence-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Recommendations</span>
+                {structuredAnswer.recommendations.slice(0, 5).map((item, index) => (
+                  <p key={`structured-recommendation-${index}`}>{item}</p>
+                ))}
+              </article>
+            </div>
+            <div className="confidence-explanation">
+              <span>Confidence explanation</span>
+              <strong>{structuredAnswer.confidence.explanation}</strong>
+            </div>
+            <div className="follow-up-panel">
+              <div className="section-heading">
+                <div>
+                  <h4>Suggested follow-up questions</h4>
+                  <p className="muted small">Use these to continue the workflow without guessing the next prompt.</p>
+                </div>
+              </div>
+              <div className="follow-up-grid">
+                {structuredAnswer.suggestedFollowUps.slice(0, 7).map((question, index) => (
+                  <button key={`${question}-${index}`} type="button" className="follow-up-chip">
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section className="answer-section research-workspace-section">
             <div className="section-heading">
               <div>
@@ -1295,8 +1419,9 @@ export function DetailPanel({
             </div>
           </section>
 
-          <section className="answer-section">
-            <h3>Discovery memo</h3>
+          <section className="answer-section source-answer-section">
+            <h3>Source answer text</h3>
+            <p className="muted small">Original model text preserved as source material. Use the structured answer above for review.</p>
             <FormattedReport content={detail.snippet} compact />
           </section>
 
@@ -1634,6 +1759,20 @@ export function DetailPanel({
                 <span>{reportVersions.length} versions</span>
               </div>
               <h3>{generatedReport.title}</h3>
+
+              <div className="report-ai-experience">
+                <div>
+                  <span>AI Confidence</span>
+                  <strong>{structuredAnswer.confidence.level}</strong>
+                  <p>{structuredAnswer.confidence.explanation}</p>
+                </div>
+                <div>
+                  <span>Recommended Next Questions</span>
+                  {structuredAnswer.suggestedFollowUps.slice(0, 3).map((question, index) => (
+                    <p key={`${question}-${index}`}>{question}</p>
+                  ))}
+                </div>
+              </div>
 
               <div className="report-evidence-summary">
                 <div>
