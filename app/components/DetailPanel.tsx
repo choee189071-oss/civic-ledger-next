@@ -312,6 +312,19 @@ function evidenceQualitySummary(detail: any, evidencePackage: any, sourceStatuse
   };
 }
 
+function sourceQualityReason(source: any, sourceStatuses: Record<string, string>) {
+  const status = sourceStatuses[sourceKey(source)] ?? source.status ?? 'Candidate';
+  const recency = source.recencyWindow || 'Undated source';
+  const tier = source.sourceTier || 'Unclassified';
+
+  if (status === 'Missing') return 'Required source or field is missing from the package.';
+  if (status === 'Rejected') return 'Analyst rejected this source for the current report.';
+  if (/Undated|date to verify/i.test(recency)) return 'Date requires manual verification before relying on it.';
+  if (/Tier 3|Tier 4|Unclassified/i.test(tier)) return 'Lower-tier or unclassified source; use only as context unless verified.';
+  if (status === 'Used in Report') return 'Marked as used in the current report.';
+  return 'Candidate source pending analyst review.';
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
@@ -354,6 +367,7 @@ export function DetailPanel({
   const input = workflowInput(detail, reportTemplate);
   const evidencePackage = evidencePackageFor(detail);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
+  const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
   const filenameBase = [
     slug(detail.title || 'issuer'),
     slug(detail.researchModeLabel || detail.topic || 'research'),
@@ -548,6 +562,36 @@ export function DetailPanel({
                 <span>{Object.entries(evidenceQuality.confidenceCounts).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No confidence score'}</span>
                 <span>Confidence combines source tier and review status.</span>
               </div>
+            </div>
+            <div className="mini-table evidence-source-register">
+              <div className="mini-table-row header">
+                <span>Source</span>
+                <span>Tier</span>
+                <span>Recency</span>
+                <span>Verification</span>
+                <span>Confidence</span>
+                <span>Reason</span>
+              </div>
+              {evidenceSources.length === 0 && (
+                <div className="mini-table-row">
+                  <span>No sources</span>
+                  <span>Unclassified</span>
+                  <span>Undated</span>
+                  <span>Missing</span>
+                  <span>Low</span>
+                  <span>Run research or attach a document to populate evidence quality.</span>
+                </div>
+              )}
+              {evidenceSources.map((source) => (
+                <div key={sourceKey(source)} className="mini-table-row">
+                  <span>{source.title || source.document || source.url || 'Untitled source'}</span>
+                  <span>{source.sourceTier || 'Unclassified'}</span>
+                  <span>{source.recencyWindow || source.date || 'Undated source'}</span>
+                  <span>{sourceStatuses[sourceKey(source)] ?? source.status ?? 'Candidate'}</span>
+                  <span>{sourceConfidence(source)}</span>
+                  <span>{sourceQualityReason(source, sourceStatuses)}</span>
+                </div>
+              ))}
             </div>
           </section>
 
