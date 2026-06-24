@@ -1472,6 +1472,38 @@ h3 {
   max-width: 720px;
 }
 
+.document-pipeline-card {
+  background: #f7fbff;
+  border: 1px solid #cfe5fb;
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.document-pipeline-card h3 {
+  color: var(--color-text);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.pipeline-steps {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pipeline-steps span {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  color: var(--color-accent-strong);
+  font-size: 12px;
+  font-weight: 820;
+  padding: 9px 10px;
+  text-align: center;
+}
+
 .document-score-strip {
   display: flex;
   flex-wrap: wrap;

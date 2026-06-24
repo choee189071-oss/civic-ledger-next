@@ -11,6 +11,7 @@ import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
 import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
 import { WorkflowCenterPanel } from './components/WorkflowCenterPanel';
 import { DocumentIntakePanel } from './components/DocumentIntakePanel';
+import type { DocumentWorkflowPackage } from '../lib/public-finance-document-pipeline';
 import type {
   GeneratedReport,
   IssuerProfile,
@@ -465,6 +466,29 @@ export default function HomePage() {
     setView('reading');
   }
 
+  function applyDocumentWorkflow(workflow: DocumentWorkflowPackage, open = false) {
+    const record = normalizeRecord(workflow.record);
+
+    setReportTemplate(workflow.report.template ?? 'credit-memo');
+    setGeneratedReport(workflow.report);
+    setSelectedId(record.id);
+    setDetail(record);
+    setRunStatuses((statuses) => ({
+      ...statuses,
+      [record.id]: record.workflowStatus ?? defaultRunStatus(record),
+    }));
+    setResults((items) => [
+      record,
+      ...items.filter((item) => item.id !== record.id),
+    ].slice(0, 12));
+    setTab('results');
+    setReportError(null);
+
+    if (open) {
+      setView('search');
+    }
+  }
+
   function startIssuerDevelopmentScan(issuer: string, mode: string, angle: string) {
     const isGeneralCcdUpdate = /CCD_GENERAL_UPDATE/i.test(angle);
     const nextOutputType = isGeneralCcdUpdate ? 'risk-monitor' : 'research-brief';
@@ -737,7 +761,11 @@ export default function HomePage() {
           />
         )}
         {view === 'documents' && (
-          <DocumentIntakePanel onOpenReading={openParsedDocumentReading} />
+          <DocumentIntakePanel
+            onOpenReading={openParsedDocumentReading}
+            onWorkflowReady={(workflow) => applyDocumentWorkflow(workflow, false)}
+            onOpenWorkflow={(workflow) => applyDocumentWorkflow(workflow, true)}
+          />
         )}
         {view === 'sources' && (
           <SourcesPanel

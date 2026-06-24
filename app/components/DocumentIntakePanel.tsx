@@ -1,42 +1,16 @@
 "use client";
 
 import { useState } from 'react';
-
-type EvidenceFinding = {
-  section: string;
-  status: 'Found' | 'Missing';
-  confidence: 'High' | 'Medium' | 'Low';
-  evidence: string;
-  manualCheck: string;
-};
-
-type ParseResult = {
-  title: string;
-  issuer?: string;
-  documentType: string;
-  sourceUrl?: string | null;
-  filename: string;
-  parsedAt: string;
-  parser: {
-    provider: string;
-    tier: string;
-    jobId: string;
-    pageCount?: number | null;
-  };
-  focus: string[];
-  markdown: string;
-  evidencePackage: {
-    documentKind: string;
-    findings: EvidenceFinding[];
-    missingFields: string[];
-    workflowSections: string[];
-    suggestedNextSteps: string[];
-  };
-  llamaExtract?: unknown;
-};
+import {
+  buildDocumentWorkflow,
+  type DocumentParseResult,
+  type DocumentWorkflowPackage,
+} from '../../lib/public-finance-document-pipeline';
 
 type Props = {
   onOpenReading: (item: { id: string; title: string; body: string[] }) => void;
+  onWorkflowReady: (workflow: DocumentWorkflowPackage) => void;
+  onOpenWorkflow: (workflow: DocumentWorkflowPackage) => void;
 };
 
 const documentTypes = [
@@ -70,7 +44,7 @@ function downloadText(content: string, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-function markdownBundle(result: ParseResult) {
+function markdownBundle(result: DocumentParseResult) {
   return [
     `# ${result.title}`,
     '',
@@ -97,14 +71,15 @@ function markdownBundle(result: ParseResult) {
   ].join('\n');
 }
 
-export function DocumentIntakePanel({ onOpenReading }: Props) {
+export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWorkflow }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [issuer, setIssuer] = useState('');
   const [documentType, setDocumentType] = useState(documentTypes[0].value);
   const [tier, setTier] = useState('agentic');
-  const [result, setResult] = useState<ParseResult | null>(null);
+  const [result, setResult] = useState<DocumentParseResult | null>(null);
+  const [workflowPackage, setWorkflowPackage] = useState<DocumentWorkflowPackage | null>(null);
   const [activeTab, setActiveTab] = useState('evidence');
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +87,7 @@ export function DocumentIntakePanel({ onOpenReading }: Props) {
   async function runParse() {
     setError(null);
     setResult(null);
+    setWorkflowPackage(null);
 
     if (!file && !url.trim()) {
       setError('Upload a PDF or paste a public PDF URL.');
@@ -139,7 +115,12 @@ export function DocumentIntakePanel({ onOpenReading }: Props) {
         return;
       }
 
-      setResult(payload.extraction);
+      const extraction = payload.extraction as DocumentParseResult;
+      const workflow = buildDocumentWorkflow(extraction);
+
+      setResult(extraction);
+      setWorkflowPackage(workflow);
+      onWorkflowReady(workflow);
       setActiveTab('evidence');
     } catch (parseError) {
       setError(parseError instanceof Error ? parseError.message : 'Document parse failed.');
@@ -149,12 +130,22 @@ export function DocumentIntakePanel({ onOpenReading }: Props) {
   }
 
   function openReading() {
+    if (!workflowPackage) return;
+    onOpenReading(workflowPackage.reading);
+  }
+
+  function openParsedMarkdown() {
     if (!result) return;
     onOpenReading({
       id: `parsed-${Date.now()}`,
-      title: result.title,
+      title: `Parsed Markdown: ${result.title}`,
       body: [markdownBundle(result)],
     });
+  }
+
+  function openWorkflow() {
+    if (!workflowPackage) return;
+    onOpenWorkflow(workflowPackage);
   }
 
   const foundCount = result?.evidencePackage.findings.filter((finding) => finding.status === 'Found').length ?? 0;
@@ -251,7 +242,7 @@ export function DocumentIntakePanel({ onOpenReading }: Props) {
             <div className="empty-document-state">
               <p className="eyebrow">Ready</p>
               <h3>Turn core PDF evidence into workflow-ready material.</h3>
-              <p className="muted">The result will appear here as an evidence package, parsed markdown, and exportable JSON.</p>
+              <p className="muted">The result will appear here as an evidence package, source list entry, credit memo draft, and reading-room document.</p>
             </div>
           ) : (
             <>
@@ -264,9 +255,37 @@ export function DocumentIntakePanel({ onOpenReading }: Props) {
                 <div className="report-toolbar">
                   <button className="button-secondary" onClick={() => downloadText(markdownBundle(result), `${slug(result.title)}_evidence.md`, 'text/markdown;charset=utf-8')}>Download MD</button>
                   <button className="button-secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), `${slug(result.title)}_evidence.json`, 'application/json;charset=utf-8')}>Download JSON</button>
-                  <button className="button-primary" onClick={openReading}>Open in Reading</button>
+                  <button className="button-secondary" onClick={openParsedMarkdown}>Open Parsed Markdown</button>
+                  <button className="button-primary" onClick={openReading}>Open Report in Reading</button>
                 </div>
               </div>
+
+              {workflowPackage && (
+                <section className="document-pipeline-card">
+                  <div>
+                    <p className="eyebrow">Document-to-Report Pipeline</p>
+                    <h3>{'Evidence package -> Source list -> Credit memo -> Reading room'}</h3>
+                    <p className="muted small">
+                      This PDF has been converted into a current research run with a draft credit memo, structured source appendix, coverage dashboard, and missing-information queue.
+                    </p>
+                  </div>
+                  <div className="pipeline-steps">
+                    {[
+                      'Evidence package',
+                      'Source list',
+                      'Credit memo sections',
+                      'Reading room',
+                    ].map((step) => (
+                      <span key={step}>{step}</span>
+                    ))}
+                  </div>
+                  <div className="report-toolbar">
+                    <button className="button-primary" onClick={openWorkflow}>
+                      Open Workflow
+                    </button>
+                  </div>
+                </section>
+              )}
 
               <div className="document-score-strip">
                 <span className="status-pill ready">{foundCount} found</span>
