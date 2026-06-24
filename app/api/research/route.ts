@@ -26,6 +26,7 @@ import {
 } from '../../../lib/research-diagnostics';
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 import { buildResearchWorkspace } from '../../../lib/research-workspace';
+import { buildIssuerDashboard } from '../../../lib/issuer-dashboard';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -1383,10 +1384,20 @@ export async function POST(request: Request) {
     coverageDashboard,
     evidencePackage,
   }, content, evidenceEngine);
+  const issuerDashboard = buildIssuerDashboard({
+    title: researchSubject,
+    facts,
+    citations,
+    searchResults,
+    documentInventory,
+    coverageDashboard,
+    evidencePackage,
+  }, content, evidenceEngine);
   const enrichedEvidencePackage = {
     ...evidencePackage,
     evidence_engine: evidenceEngine,
     research_workspace: researchWorkspace,
+    issuer_dashboard: issuerDashboard,
   };
 
   return NextResponse.json({
@@ -1437,6 +1448,7 @@ export async function POST(request: Request) {
       evidenceEngine,
       evidenceCoverageScore: evidenceEngine.coveragePercent,
       researchWorkspace,
+      issuerDashboard,
       documentDiagnostics,
       retrievalDiagnostics,
       failureClassification,

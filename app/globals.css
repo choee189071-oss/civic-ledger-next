@@ -1167,6 +1167,194 @@ h3 {
   padding: 8px;
 }
 
+.issuer-dashboard-section {
+  background: #fbfdff;
+  border: 1px solid #d7e9f8;
+  border-radius: var(--radius);
+  gap: 14px;
+  padding: 14px;
+}
+
+.financial-trend-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.trend-card,
+.debt-metric-card,
+.market-metric-card {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.trend-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.trend-card-head span,
+.debt-metric-card span,
+.market-metric-card span {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.trend-card-head strong,
+.debt-metric-card strong,
+.market-metric-card strong {
+  color: var(--color-text);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.trend-card-head em {
+  background: #eef6ff;
+  border-radius: 999px;
+  color: var(--color-primary-dark);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+  padding: 5px 8px;
+}
+
+.trend-card.needs-source .trend-card-head em,
+.trend-card.pressured .trend-card-head em {
+  background: #fff8ec;
+  color: var(--color-amber);
+}
+
+.trend-bars {
+  display: grid;
+  gap: 7px;
+}
+
+.trend-bar-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 74px minmax(90px, 1fr) minmax(96px, 0.8fr);
+}
+
+.trend-bar-row > span {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.trend-bar-row strong {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trend-bar-track {
+  background: var(--color-subtle);
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+}
+
+.trend-bar-track i {
+  background: var(--color-primary);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.rating-timeline {
+  border-left: 2px solid #d7e9f8;
+  display: grid;
+  gap: 12px;
+  margin-left: 8px;
+  padding-left: 16px;
+}
+
+.rating-event {
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 90px minmax(0, 1fr);
+  padding: 12px;
+  position: relative;
+}
+
+.rating-event::before {
+  background: var(--color-primary);
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  content: '';
+  height: 12px;
+  left: -23px;
+  position: absolute;
+  top: 18px;
+  width: 12px;
+}
+
+.rating-date {
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.rating-event h4 {
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.rating-event p,
+.debt-metric-card p,
+.market-metric-card p {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.debt-dashboard-grid,
+.market-metric-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.market-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.debt-metric-card.available {
+  border-color: #cde4f7;
+}
+
+.debt-metric-card.needs-source,
+.debt-metric-card.not-found {
+  background: #fffdf8;
+  border-color: #f0d6aa;
+}
+
+.market-comps-table {
+  overflow-x: auto;
+}
+
+.market-comps-table .mini-table-row {
+  grid-template-columns: minmax(220px, 1.2fr) 110px minmax(180px, 1fr) minmax(180px, 1fr) 130px;
+  min-width: 920px;
+}
+
 .evidence-command {
   background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
   border: 1px solid #d7e9f8;
@@ -3018,7 +3206,9 @@ h3 {
   .document-diagnostic-grid,
   .issuer-entry-grid,
   .workspace-summary-grid,
-  .risk-monitor-grid {
+  .risk-monitor-grid,
+  .financial-trend-grid,
+  .debt-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3119,6 +3309,9 @@ h3 {
   .workspace-summary-grid,
   .credit-factor-grid,
   .risk-monitor-grid,
+  .financial-trend-grid,
+  .debt-dashboard-grid,
+  .market-metric-grid,
   .workspace-kpis,
   .reading-status-strip,
   .sector-tabs,

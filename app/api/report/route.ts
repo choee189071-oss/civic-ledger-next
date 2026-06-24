@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 import { buildResearchWorkspace } from '../../../lib/research-workspace';
+import { buildIssuerDashboard } from '../../../lib/issuer-dashboard';
 
 export const runtime = 'nodejs';
 
@@ -519,6 +520,7 @@ function compactRecord(record: any, templateKey: ReportTemplate) {
     missingCoreFinanceDocs: record?.financeFocused && record?.coreFinanceDocumentsFound === false,
     searchQueries: record?.searchQueries ?? [],
     researchWorkspace: record?.researchWorkspace ?? record?.evidencePackage?.research_workspace ?? null,
+    issuerDashboard: record?.issuerDashboard ?? record?.evidencePackage?.issuer_dashboard ?? null,
   };
 }
 
@@ -569,6 +571,11 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     'For Credit Factors, separate Business Profile, Financial Profile, Debt Profile, Liquidity, Governance, Operating Performance, and Capital Program. Mark unsupported factors as Needs Evidence or Not Surfaced rather than inventing analysis.',
     'For Key Risks, explicitly address Wildfire, Political, Pension, Cyber, Water Supply, Demand, Rate Pressure, and Climate when the template calls for risk monitoring or credit analysis. Use No Current Signal or Needs Evidence when no issuer-specific source supports the risk.',
   ];
+  const issuerDashboardRules = [
+    'If issuerDashboard is supplied, use it for financial trends, rating timeline, debt dashboard, and market dashboard sections.',
+    'Do not manufacture dashboard metrics. If revenue, expenses, cash, debt, liquidity, capital spending, ratings, spreads, trades, or callable bonds are Not found or Needs Source in issuerDashboard, preserve that label and list the next check.',
+    'When market data is missing, state that comparable issuers, benchmark spreads, recent trades, and relative value require market-data verification.',
+  ];
   const workflowReportRules = templateKey === 'watchlist-monitor'
     ? [
       'For Watchlist Monitor, include a table with issuer, latest development status, recency label, source tier, source URL, and next action.',
@@ -615,6 +622,7 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     ...documentInventoryRules,
     ...executiveSummaryRules,
     ...researchWorkspaceRules,
+    ...issuerDashboardRules,
     ...workflowReportRules,
     `Audience: ${template.audience}.`,
     `Required report sections, in this order: ${template.sections.join(' | ')}.`,
@@ -714,6 +722,7 @@ export async function POST(request: Request) {
   const content = responseText(payload);
   const evidenceEngine = buildEvidenceEngine(record, content || '');
   const researchWorkspace = buildResearchWorkspace(record, content || '', evidenceEngine);
+  const issuerDashboard = buildIssuerDashboard(record, content || '', evidenceEngine);
 
   return NextResponse.json({
     report: {
@@ -731,6 +740,7 @@ export async function POST(request: Request) {
       evidenceEngine,
       evidenceCoverageScore: evidenceEngine.coveragePercent,
       researchWorkspace,
+      issuerDashboard,
     },
   });
 }

@@ -10,6 +10,7 @@ import {
 } from '../../lib/research-diagnostics';
 import { buildEvidenceEngine, type EvidenceCoverage } from '../../lib/evidence-engine';
 import { buildResearchWorkspace, type ResearchWorkspace } from '../../lib/research-workspace';
+import { buildIssuerDashboard, type IssuerDashboard } from '../../lib/issuer-dashboard';
 
 type Props = {
   detail: any;
@@ -50,6 +51,7 @@ const reportTemplates = [
 
 const workflowTabs = [
   ['discovery', 'Research Package'],
+  ['dashboard', 'Dashboard'],
   ['report', 'Draft Report'],
   ['export', 'Deliverable'],
 ];
@@ -318,6 +320,64 @@ function researchWorkspaceMarkdown(workspace: ResearchWorkspace | null | undefin
   ].join('\n');
 }
 
+function issuerDashboardMarkdown(dashboard: IssuerDashboard | null | undefined) {
+  if (!dashboard) {
+    return [
+      '## Issuer Dashboard',
+      '',
+      'Issuer dashboard was not calculated for this export.',
+    ].join('\n');
+  }
+
+  const debtMetrics = Object.values(dashboard.debtDashboard);
+
+  return [
+    '## Issuer Dashboard',
+    '',
+    '### Financial Trends',
+    '',
+    '| Metric | Current Value | Trend | Confidence | Evidence | Next Check |',
+    '|---|---|---|---|---|---|',
+    ...dashboard.financialTrends.map((metric) =>
+      `| ${mdCell(metric.label)} | ${mdCell(metric.currentValue)} | ${mdCell(metric.trend)} | ${mdCell(metric.confidence)} | ${mdCell(metric.evidence.join('; ') || 'Not found')} | ${mdCell(metric.nextCheck)} |`
+    ),
+    '',
+    '### Rating Timeline',
+    '',
+    '| Date | Agency | Rating | Outlook | Action | Confidence | Evidence |',
+    '|---|---|---|---|---|---|---|',
+    ...dashboard.ratingTimeline.map((item) =>
+      `| ${mdCell(item.date)} | ${mdCell(item.agency)} | ${mdCell(item.rating)} | ${mdCell(item.outlook)} | ${mdCell(item.action)} | ${mdCell(item.confidence)} | ${mdCell(item.evidence.join('; ') || 'Not found')} |`
+    ),
+    '',
+    '### Debt Dashboard',
+    '',
+    '| Metric | Value | Status | Confidence | Evidence | Next Check |',
+    '|---|---|---|---|---|---|',
+    ...debtMetrics.map((metric) =>
+      `| ${mdCell(metric.label)} | ${mdCell(metric.value)} | ${mdCell(metric.status)} | ${mdCell(metric.confidence)} | ${mdCell(metric.evidence.join('; ') || 'Not found')} | ${mdCell(metric.nextCheck)} |`
+    ),
+    '',
+    '### Market Dashboard',
+    '',
+    '| Comparable Issuer | Rating | Spread | Recent Trade | Relative Value | Evidence |',
+    '|---|---|---|---|---|---|',
+    ...dashboard.marketDashboard.comparableIssuers.map((issuer) =>
+      `| ${mdCell(issuer.issuer)} | ${mdCell(issuer.rating)} | ${mdCell(issuer.spread)} | ${mdCell(issuer.recentTrade)} | ${mdCell(issuer.relativeValue)} | ${mdCell(issuer.evidence.join('; ') || 'Not found')} |`
+    ),
+    '',
+    '| Market Metric | Value | Status | Confidence | Next Check |',
+    '|---|---|---|---|---|',
+    ...[
+      dashboard.marketDashboard.benchmarkSpreads,
+      dashboard.marketDashboard.recentTrades,
+      dashboard.marketDashboard.relativeValue,
+    ].map((metric) =>
+      `| ${mdCell(metric.label)} | ${mdCell(metric.value)} | ${mdCell(metric.status)} | ${mdCell(metric.confidence)} | ${mdCell(metric.nextCheck)} |`
+    ),
+  ].join('\n');
+}
+
 function markdownFor(
   detail: any,
   generatedReport: any | null,
@@ -330,6 +390,7 @@ function markdownFor(
   const evidencePackage = evidencePackageFor(detail);
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
   const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
+  const issuerDashboard = issuerDashboardFor(detail, generatedReport, evidencePackage, evidenceEngine);
 
   return [
     `# ${title}`,
@@ -339,6 +400,8 @@ function markdownFor(
     exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate, evidenceEngine),
     '',
     researchWorkspaceMarkdown(researchWorkspace),
+    '',
+    issuerDashboardMarkdown(issuerDashboard),
     '',
     evidenceEngineMarkdown(evidenceEngine),
     '',
@@ -390,6 +453,26 @@ function researchWorkspaceFor(
   }
 
   return buildResearchWorkspace({
+    ...detail,
+    evidencePackage,
+  }, generatedReport?.content || detail?.snippet || '', evidenceEngine);
+}
+
+function issuerDashboardFor(
+  detail: any,
+  generatedReport: any | null,
+  evidencePackage: any,
+  evidenceEngine: EvidenceCoverage
+): IssuerDashboard {
+  const packaged = generatedReport?.issuerDashboard ||
+    detail?.issuerDashboard ||
+    evidencePackage?.issuer_dashboard;
+
+  if (packaged?.financialTrends && packaged?.ratingTimeline && packaged?.debtDashboard && packaged?.marketDashboard && !generatedReport?.editedAt) {
+    return packaged as IssuerDashboard;
+  }
+
+  return buildIssuerDashboard({
     ...detail,
     evidencePackage,
   }, generatedReport?.content || detail?.snippet || '', evidenceEngine);
@@ -618,6 +701,17 @@ function failureClassificationFor(detail: any, evidencePackage: any, documentDia
     classifyResearchFailure({ documentDiagnostics, retrievalDiagnostics });
 }
 
+function pointWidth(value: number | null, values: Array<number | null>) {
+  if (value === null) return '0%';
+  const numeric = values.filter((item): item is number => typeof item === 'number' && Number.isFinite(item));
+  const max = Math.max(...numeric, 1);
+  return `${Math.max(8, Math.round((value / max) * 100))}%`;
+}
+
+function debtDashboardMetrics(dashboard: IssuerDashboard) {
+  return Object.values(dashboard.debtDashboard);
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
@@ -661,6 +755,7 @@ export function DetailPanel({
   const evidencePackage = evidencePackageFor(detail);
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
   const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
+  const issuerDashboard = issuerDashboardFor(detail, generatedReport, evidencePackage, evidenceEngine);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
   const documentDiagnostics = documentDiagnosticsFor(detail, evidencePackage);
@@ -699,7 +794,12 @@ export function DetailPanel({
 
   function downloadEvidenceJson() {
     downloadBlob(
-      JSON.stringify({ ...evidencePackage, evidence_engine: evidenceEngine, research_workspace: researchWorkspace }, null, 2),
+      JSON.stringify({
+        ...evidencePackage,
+        evidence_engine: evidenceEngine,
+        research_workspace: researchWorkspace,
+        issuer_dashboard: issuerDashboard,
+      }, null, 2),
       `${slug(detail.title || 'issuer')}_${slug(detail.researchModeLabel || 'research')}_evidence_package_${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8'
     );
@@ -1356,6 +1456,142 @@ export function DetailPanel({
               </div>
             </section>
           )}
+        </>
+      )}
+
+      {activeTab === 'dashboard' && (
+        <>
+          <section className="answer-section issuer-dashboard-section">
+            <div className="section-heading">
+              <div>
+                <h3>Financial trends</h3>
+                <p className="muted small">Revenue, expenses, cash, debt, liquidity, and capital spending extracted from available evidence.</p>
+              </div>
+              <span className="status-pill">Historical charts</span>
+            </div>
+            <div className="financial-trend-grid">
+              {issuerDashboard.financialTrends.map((metric) => {
+                const values = metric.dataPoints.map((point) => point.value);
+                return (
+                  <article key={metric.key} className={`trend-card ${metric.trend.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <div className="trend-card-head">
+                      <div>
+                        <span>{metric.label}</span>
+                        <strong>{metric.currentValue}</strong>
+                      </div>
+                      <em>{metric.trend}</em>
+                    </div>
+                    <div className="trend-bars">
+                      {metric.dataPoints.map((point, index) => (
+                        <div key={`${metric.key}-${point.year}-${index}`} className="trend-bar-row">
+                          <span>{point.year}</span>
+                          <div className="trend-bar-track">
+                            <i style={{ width: pointWidth(point.value, values) }} />
+                          </div>
+                          <strong>{point.value !== null ? point.label.slice(0, 28) : 'Needs source'}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="record-meta">
+                      <span>{metric.confidence} confidence</span>
+                      <span>{metric.evidence.length} evidence items</span>
+                    </div>
+                    <p className="next-check">{metric.nextCheck}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="answer-section issuer-dashboard-section">
+            <div className="section-heading">
+              <div>
+                <h3>Rating timeline</h3>
+                <p className="muted small">Historical ratings, rating actions, and outlook changes surfaced in this research run.</p>
+              </div>
+              <span className="status-pill">
+                {issuerDashboard.ratingTimeline.length} events
+              </span>
+            </div>
+            <div className="rating-timeline">
+              {issuerDashboard.ratingTimeline.map((item, index) => (
+                <article key={`${item.date}-${item.agency}-${index}`} className="rating-event">
+                  <div className="rating-date">{item.date}</div>
+                  <div>
+                    <h4>{item.agency}</h4>
+                    <p>{item.action}</p>
+                    <div className="record-meta">
+                      <span>{item.rating}</span>
+                      <span>{item.outlook}</span>
+                      <span>{item.confidence} confidence</span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="answer-section issuer-dashboard-section">
+            <div className="section-heading">
+              <div>
+                <h3>Debt dashboard</h3>
+                <p className="muted small">Outstanding debt, callable bonds, maturities, coupon, and spread coverage.</p>
+              </div>
+              <span className="status-pill">
+                {debtDashboardMetrics(issuerDashboard).filter((metric) => metric.status === 'Available').length} available
+              </span>
+            </div>
+            <div className="debt-dashboard-grid">
+              {debtDashboardMetrics(issuerDashboard).map((metric) => (
+                <article key={metric.label} className={`debt-metric-card ${metric.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <span>{metric.label}</span>
+                  <strong>{metric.value}</strong>
+                  <div className="record-meta">
+                    <span>{metric.status}</span>
+                    <span>{metric.confidence} confidence</span>
+                  </div>
+                  <p>{metric.nextCheck}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="answer-section issuer-dashboard-section">
+            <div className="section-heading">
+              <div>
+                <h3>Market dashboard</h3>
+                <p className="muted small">Comparable issuers, benchmark spreads, recent trades, and relative value.</p>
+              </div>
+              <span className="status-pill warning">Market data needs verification</span>
+            </div>
+            <div className="market-metric-grid">
+              {[issuerDashboard.marketDashboard.benchmarkSpreads, issuerDashboard.marketDashboard.recentTrades, issuerDashboard.marketDashboard.relativeValue].map((metric) => (
+                <article key={metric.label} className="market-metric-card">
+                  <span>{metric.label}</span>
+                  <strong>{metric.value}</strong>
+                  <p>{metric.nextCheck}</p>
+                </article>
+              ))}
+            </div>
+            <div className="mini-table market-comps-table">
+              <div className="mini-table-row header">
+                <span>Comparable Issuer</span>
+                <span>Rating</span>
+                <span>Spread</span>
+                <span>Recent Trade</span>
+                <span>Relative Value</span>
+              </div>
+              {issuerDashboard.marketDashboard.comparableIssuers.map((issuer, index) => (
+                <div key={`${issuer.issuer}-${index}`} className="mini-table-row">
+                  <span>{issuer.issuer}</span>
+                  <span>{issuer.rating}</span>
+                  <span>{issuer.spread}</span>
+                  <span>{issuer.recentTrade}</span>
+                  <span>{issuer.relativeValue}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         </>
       )}
 
