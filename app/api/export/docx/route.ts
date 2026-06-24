@@ -6,6 +6,7 @@ type Block =
   | { type: 'heading'; level: number; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'bullet'; text: string }
+  | { type: 'table'; rows: string[][] }
   | { type: 'rule' };
 
 function normalizeText(value: string) {
@@ -33,10 +34,28 @@ function cleanInline(value: string) {
     .trim();
 }
 
+function isTableSeparator(line: string) {
+  const cells = line.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()).filter(Boolean);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function parseTableLines(lines: string[]) {
+  return lines
+    .filter((line) => !isTableSeparator(line))
+    .map((line) =>
+      line
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((cell) => cleanInline(cell))
+    )
+    .filter((row) => row.length > 1);
+}
+
 function parseMarkdown(content: string): Block[] {
   const blocks: Block[] = [];
   const lines = normalizeText(content).split('\n');
   let paragraph: string[] = [];
+  let tableLines: string[] = [];
 
   function flushParagraph() {
     if (paragraph.length > 0) {
@@ -45,13 +64,32 @@ function parseMarkdown(content: string): Block[] {
     }
   }
 
+  function flushTable() {
+    if (tableLines.length > 0) {
+      const rows = parseTableLines(tableLines);
+      if (rows.length > 0) {
+        blocks.push({ type: 'table', rows });
+      }
+      tableLines = [];
+    }
+  }
+
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
     if (!line) {
       flushParagraph();
+      flushTable();
       continue;
     }
+
+    if (line.startsWith('|') && line.endsWith('|')) {
+      flushParagraph();
+      tableLines.push(line);
+      continue;
+    }
+
+    flushTable();
 
     if (/^-{3,}$/.test(line)) {
       flushParagraph();
@@ -77,6 +115,7 @@ function parseMarkdown(content: string): Block[] {
   }
 
   flushParagraph();
+  flushTable();
   return blocks;
 }
 
@@ -110,6 +149,49 @@ function bulletXml(text: string) {
   ].join('');
 }
 
+function tableCellXml(text: string, header = false) {
+  const runStyle = header
+    ? '<w:rPr><w:b/><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="20"/><w:color w:val="344054"/></w:rPr>'
+    : '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="20"/></w:rPr>';
+
+  return [
+    '<w:tc>',
+    '<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>',
+    '<w:p>',
+    '<w:r>',
+    runStyle,
+    `<w:t xml:space="preserve">${escapeXml(cleanInline(text))}</w:t>`,
+    '</w:r>',
+    '</w:p>',
+    '</w:tc>',
+  ].join('');
+}
+
+function tableXml(rows: string[][]) {
+  const body = rows.map((row, rowIndex) => [
+    '<w:tr>',
+    ...row.map((cell) => tableCellXml(cell, rowIndex === 0)),
+    '</w:tr>',
+  ].join('')).join('');
+
+  return [
+    '<w:tbl>',
+    '<w:tblPr>',
+    '<w:tblW w:w="0" w:type="auto"/>',
+    '<w:tblBorders>',
+    '<w:top w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '<w:left w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '<w:right w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
+    '</w:tblBorders>',
+    '</w:tblPr>',
+    body,
+    '</w:tbl>',
+  ].join('');
+}
+
 function ruleXml() {
   return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="D0D7E2"/></w:pBdr></w:pPr></w:p>';
 }
@@ -123,6 +205,7 @@ function documentXml(title: string, content: string) {
     ...blocks.map((block) => {
       if (block.type === 'heading') return headingXml(block.text, block.level + 1);
       if (block.type === 'bullet') return bulletXml(block.text);
+      if (block.type === 'table') return tableXml(block.rows);
       if (block.type === 'rule') return ruleXml();
       return paragraphXml(block.text);
     }),

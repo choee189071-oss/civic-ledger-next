@@ -1167,6 +1167,31 @@ h3 {
   gap: 10px;
 }
 
+.report-status-banner {
+  align-items: flex-start;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: var(--radius);
+  color: #9a3412;
+  display: grid;
+  gap: 4px;
+  line-height: 1.45;
+  margin-bottom: 4px;
+  padding: 13px 15px;
+}
+
+.report-status-banner strong {
+  color: #7c2d12;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.report-status-banner span {
+  color: #9a3412;
+  font-size: 14px;
+}
+
 .formatted-report h2,
 .formatted-report h3,
 .formatted-report h4 {

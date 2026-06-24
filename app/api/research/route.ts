@@ -434,6 +434,51 @@ function buildCoverageDashboard(results: SonarSearchResult[]) {
   }));
 }
 
+function sourceText(result: SonarSearchResult) {
+  return `${result.title ?? ''} ${result.snippet ?? ''} ${result.notes ?? ''} ${result.url ?? ''}`;
+}
+
+function extractCusip(result: SonarSearchResult) {
+  const match = sourceText(result).match(/\b[A-Z0-9]{6}[A-Z0-9]{2}[0-9]\b/i);
+  return match?.[0].toUpperCase() ?? 'Not found';
+}
+
+function extractEmmaSubmissionId(result: SonarSearchResult) {
+  const text = sourceText(result);
+  if (!/emma|msrb/i.test(text)) return 'Not found';
+
+  const match = text.match(/(?:submission|accession|document|filing)\s*(?:id|number|no\.?)?\s*[:#]?\s*([A-Z0-9-]{6,})/i);
+  return match?.[1] ?? 'Not found';
+}
+
+function extractLabeledDate(result: SonarSearchResult, labels: string[]) {
+  const text = sourceText(result);
+  const datePattern = '([A-Z][a-z]+\\s+\\d{1,2},\\s+\\d{4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{4}-\\d{2}-\\d{2})';
+
+  for (const label of labels) {
+    const pattern = new RegExp(`${label}[^A-Za-z0-9]{0,24}${datePattern}`, 'i');
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  return 'Not found';
+}
+
+function publicationDate(result: SonarSearchResult) {
+  return result.date || result.last_updated || extractLabeledDate(result, ['publication date', 'published', 'filing date', 'posted']);
+}
+
+function filingEntity(result: SonarSearchResult) {
+  if (result.source) return result.source;
+  if (!result.url) return 'Not found';
+
+  try {
+    return new URL(result.url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'Not found';
+  }
+}
+
 function buildDocumentInventory(results: SonarSearchResult[]) {
   return results
     .filter((result) => (result.sourceTierRank ?? 4) <= 2)
@@ -442,10 +487,18 @@ function buildDocumentInventory(results: SonarSearchResult[]) {
       document: result.title || (result.url ? sourceLabel(result.url) : 'Untitled source'),
       type: result.documentType || 'General source',
       sourceTier: `${result.sourceTier}: ${result.sourceTierName}`,
-      date: result.date || result.last_updated || 'Unknown',
+      date: publicationDate(result),
+      publicationDate: publicationDate(result),
+      datedDate: extractLabeledDate(result, ['dated date', 'dated']),
+      closingDate: extractLabeledDate(result, ['closing date', 'closed']),
+      emmaFilingDate: /emma|msrb/i.test(sourceText(result)) ? publicationDate(result) : 'Not found',
+      emmaSubmissionId: extractEmmaSubmissionId(result),
+      cusip: extractCusip(result),
+      filingEntity: filingEntity(result),
       source: result.url ? sourceLabel(result.url) : result.source || 'Web',
       status: result.status || 'Candidate',
       recencyWindow: result.recencyWindow || 'Undated source',
+      confidenceTier: sourceConfidence(result),
       notes: result.notes || '',
       url: result.url,
     }));
@@ -549,8 +602,15 @@ function buildEvidencePackage({
       source_tier: item.sourceTier,
       source_url: item.url,
       date: item.date,
+      publication_date: item.publicationDate,
+      dated_date: item.datedDate,
+      closing_date: item.closingDate,
+      emma_filing_date: item.emmaFilingDate,
+      emma_submission_id: item.emmaSubmissionId,
+      cusip: item.cusip,
+      filing_entity: item.filingEntity,
       status: item.status.toLowerCase(),
-      confidence: item.sourceTier.startsWith('Tier 1') ? 'high' : 'medium',
+      confidence: item.confidenceTier,
       recency_window: item.recencyWindow,
       notes: item.notes,
     })),

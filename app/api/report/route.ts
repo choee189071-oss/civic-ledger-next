@@ -41,6 +41,7 @@ const REPORT_TEMPLATES = {
       'Credit Strengths',
       'Credit Risks',
       'Financial Performance',
+      'Debt Service Coverage and Covenants',
       'Debt Profile',
       'Capital Plan',
       'Outlook / Monitoring Items',
@@ -57,7 +58,8 @@ const REPORT_TEMPLATES = {
       'Investment Thesis',
       'Key Credit Drivers',
       'Downside Risks',
-      'Relative Value / Peer Context',
+      'Relative Value / Benchmark Analysis',
+      'Comparable Bond List',
       'Required Follow-Up',
       'Source Appendix',
     ],
@@ -68,6 +70,7 @@ const REPORT_TEMPLATES = {
     sections: [
       'Search Diagnostics',
       'Document Inventory',
+      'CUSIP / EMMA Filing Detail',
       'Source Tier Summary',
       'Coverage Dashboard',
       'Missing Documents',
@@ -80,6 +83,8 @@ const REPORT_TEMPLATES = {
     sections: [
       'Rating Question',
       'Analytical Summary',
+      'Indicative Scorecard',
+      'Anchor Rating and Modifiers',
       'Business / Enterprise Profile',
       'Financial Profile',
       'Debt and Legal Security',
@@ -120,6 +125,7 @@ const REPORT_TEMPLATES = {
     sections: [
       'Search Diagnostics',
       'Source Tier Summary',
+      'Structured Source Appendix',
       'Document Inventory',
       'Raw Evidence Notes',
       'Coverage Dashboard',
@@ -161,6 +167,8 @@ const REPORT_TEMPLATES = {
       'Three Key Strengths',
       'Three Key Risks',
       'Evidence Coverage Score',
+      'Evidence Coverage Score Method',
+      'Key Evidence Caveats',
       'Next Step',
     ],
   },
@@ -207,6 +215,142 @@ function responseText(payload: any) {
   return parts.join('\n\n').trim();
 }
 
+function sourceText(source: any) {
+  return [
+    source?.title,
+    source?.document,
+    source?.document_title,
+    source?.snippet,
+    source?.notes,
+    source?.url,
+    source?.source_url,
+  ].filter(Boolean).join(' ');
+}
+
+function firstValue(source: any, keys: string[]) {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  return 'Not found';
+}
+
+function inferDocumentType(source: any) {
+  const existing = firstValue(source, ['document_type', 'documentType', 'type']);
+  if (existing !== 'Not found') return existing;
+
+  const text = sourceText(source).toLowerCase();
+
+  if (/annual comprehensive financial report|\bacfr\b|audited financial|financial statements/.test(text)) return 'ACFR / Audited Financial Statements';
+  if (/preliminary official statement|\bpos\b/.test(text)) return 'Preliminary Official Statement';
+  if (/official statement/.test(text)) return 'Official Statement';
+  if (/emma|msrb|continuing disclosure|annual disclosure/.test(text)) return 'Continuing Disclosure';
+  if (/rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra/.test(text)) return 'Rating Letter / Rating Report';
+  if (/budget|capital improvement|\bcip\b/.test(text)) return /capital improvement|\bcip\b/.test(text) ? 'Capital Improvement Plan' : 'Budget';
+  if (/board|agenda|minutes|resolution|ordinance/.test(text)) return 'Board Packet / Resolution';
+
+  return 'Other';
+}
+
+function extractCusip(source: any) {
+  const match = sourceText(source).match(/\b[A-Z0-9]{6}[A-Z0-9]{2}[0-9]\b/i);
+  return match?.[0].toUpperCase() ?? firstValue(source, ['cusip', 'CUSIP']);
+}
+
+function extractEmmaSubmissionId(source: any) {
+  const explicit = firstValue(source, ['emma_submission_id', 'emmaSubmissionId', 'submission_id', 'submissionId']);
+  if (explicit !== 'Not found') return explicit;
+
+  const text = sourceText(source);
+  if (!/emma|msrb/i.test(text)) return 'Not found';
+
+  const match = text.match(/(?:submission|accession|document|filing)\s*(?:id|number|no\.?)?\s*[:#]?\s*([A-Z0-9-]{6,})/i);
+  return match?.[1] ?? 'Not found';
+}
+
+function sourceDate(source: any) {
+  return firstValue(source, ['publication_date', 'publicationDate', 'filing_date', 'filingDate', 'date', 'last_updated', 'lastUpdated']);
+}
+
+function sourceTier(source: any) {
+  return firstValue(source, ['source_tier', 'sourceTier', 'tier']);
+}
+
+function confidenceTier(source: any) {
+  const explicit = firstValue(source, ['confidence_tier', 'confidenceTier', 'confidence']);
+  if (explicit !== 'Not found') return explicit;
+
+  const tier = sourceTier(source);
+  if (/Tier 1/i.test(tier)) return 'High';
+  if (/Tier 2/i.test(tier)) return 'Medium';
+  if (/Tier 3|Tier 4/i.test(tier)) return 'Low';
+  return 'Not found';
+}
+
+function sourceUrl(source: any) {
+  return firstValue(source, ['source_url', 'url']);
+}
+
+function filingEntity(source: any) {
+  const explicit = firstValue(source, ['filing_entity', 'filingEntity', 'source']);
+  if (explicit !== 'Not found') return explicit;
+
+  const url = sourceUrl(source);
+  if (url === 'Not found') return 'Not found';
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'Not found';
+  }
+}
+
+function sourceAppendix(record: any) {
+  const candidates = [
+    ...(record?.evidencePackage?.document_inventory ?? []),
+    ...(record?.documentInventory ?? []),
+    ...(record?.searchResults ?? []),
+    ...((record?.citations ?? []) as string[]).map((url) => ({ title: url, url })),
+  ];
+  const seen = new Set<string>();
+
+  return candidates
+    .map((source: any) => {
+      const url = sourceUrl(source);
+      const title = firstValue(source, ['document_title', 'document', 'title']);
+      const key = `${url}|${title}`.toLowerCase();
+
+      if (key === 'not found|not found' || seen.has(key)) {
+        return null;
+      }
+
+      seen.add(key);
+
+      return {
+        document_title: title,
+        document_type: inferDocumentType(source),
+        url,
+        publication_date: sourceDate(source),
+        dated_date: firstValue(source, ['dated_date', 'datedDate']),
+        closing_date: firstValue(source, ['closing_date', 'closingDate']),
+        filing_entity: filingEntity(source),
+        emma_filing_date: firstValue(source, ['emma_filing_date', 'emmaFilingDate', 'filing_date', 'filingDate']),
+        emma_submission_id: extractEmmaSubmissionId(source),
+        cusip: extractCusip(source),
+        confidence_tier: confidenceTier(source),
+        source_tier: sourceTier(source),
+        recency_window: firstValue(source, ['recency_window', 'recencyWindow']),
+        verification_status: firstValue(source, ['verification_status', 'verificationStatus', 'status']),
+        notes: firstValue(source, ['notes', 'snippet']),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 25);
+}
+
 function compactRecord(record: any) {
   return {
     title: record?.title,
@@ -221,6 +365,7 @@ function compactRecord(record: any) {
     citations: record?.citations ?? [],
     coverageDashboard: record?.coverageDashboard ?? [],
     documentInventory: record?.documentInventory ?? [],
+    sourceAppendix: sourceAppendix(record),
     sourceEvidence: (record?.searchResults ?? []).slice(0, 20).map((result: any) => ({
       title: result.title,
       url: result.url,
@@ -230,6 +375,9 @@ function compactRecord(record: any) {
       sourceTierName: result.sourceTierName,
       documentType: result.documentType,
       recencyWindow: result.recencyWindow,
+      cusip: extractCusip(result),
+      emmaSubmissionId: extractEmmaSubmissionId(result),
+      confidenceTier: confidenceTier(result),
       notes: result.notes,
     })),
     missingCoreFinanceDocs: record?.financeFocused && record?.coreFinanceDocumentsFound === false,
@@ -238,10 +386,44 @@ function compactRecord(record: any) {
 }
 
 function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate], templateKey: ReportTemplate) {
+  const sourceAppendixRules = [
+    'Format every Source Appendix as a structured table with these columns: Document type, Document title, Publication / filing date, Dated date, Closing date, Filing entity, CUSIP, EMMA submission ID, Confidence tier, Verification status, URL.',
+    'If a Source Appendix field is not found, write "Not found" rather than leaving it blank.',
+    'For EMMA/MSRB sources, include EMMA filing date and submission ID when available. If unavailable, say "Not found".',
+    'Separate OS/POS dated date from closing date when both are available. Do not infer a date unless the package supplies it.',
+  ];
   const creditMemoRules = templateKey === 'credit-memo'
     ? [
-      'For Credit Memo, include a top-level Credit Snapshot with exactly these fields when available: Issuer, Sector, Systems, State, Revenue pledge, Research mode, Evidence coverage score, Preliminary view, Confidence, Primary risks, Primary strengths, Final recommendation status.',
+      'For Credit Memo, include a top-level Credit Snapshot with exactly these fields: Issuer, Sector, Systems, State, Revenue pledge, Research mode, Evidence coverage score, Preliminary view, Confidence, Debt Service Coverage (DSC), Rate Covenant, Additional Bonds Test, CUSIP, Last EMMA filing date, Primary risks, Primary strengths, Final recommendation status.',
+      'For DSC, Rate Covenant, Additional Bonds Test, CUSIP, and Last EMMA filing date, use the value from the package or write "Not found".',
+      'In Debt Service Coverage and Covenants, explicitly discuss DSC, rate covenant status, additional bonds test status, debt service schedule availability, and whether covenant conclusions are supported by Tier 1 evidence.',
       'For Preliminary view, avoid final recommendations unless required Tier 1 documents are found. If evidence is incomplete, mark the view preliminary and explain the missing documents.',
+    ]
+    : [];
+  const investmentCommitteeRules = templateKey === 'investment-committee-memo'
+    ? [
+      'For Investment Committee Memo, include Relative Value / Benchmark Analysis with Spread to MMD / benchmark, yield / spread date, maturity context, rating context, and whether the data is current or not found.',
+      'Include a Comparable Bond List table with Issuer, Sector, Security, Rating, Maturity, Coupon / Yield if found, Spread to MMD / benchmark if found, Source, and Notes.',
+      'If comparable bond data is unavailable, say "Comparable bond data not found in the supplied package" and list the exact follow-up data needed.',
+    ]
+    : [];
+  const ratingCommitteeRules = templateKey === 'rating-committee-memo'
+    ? [
+      'For Rating Committee Memo, include an Indicative Scorecard table covering Business Profile and Financial Profile subfactors, score / assessment, evidence, and confidence.',
+      'Include Anchor Rating and Modifiers showing the preliminary anchor, upward / downward modifiers, information gaps, and final rating view status.',
+      'Do not state an actual rating action unless the package contains rating agency evidence. Mark all unsupported ratings as preliminary analytical indications.',
+    ]
+    : [];
+  const documentInventoryRules = templateKey === 'document-inventory-report'
+    ? [
+      'For Document Inventory Report, include CUSIP / EMMA Filing Detail with CUSIP, EMMA filing date, EMMA submission ID, OS/POS dated date, OS/POS closing date, filing entity, document type, source tier, and verification status.',
+      'Flag missing CUSIP, missing EMMA filing date, missing dated date, and missing closing date as discrete follow-up items.',
+    ]
+    : [];
+  const executiveSummaryRules = templateKey === 'executive-summary'
+    ? [
+      'For Executive Summary, replace shallow bulleting with a concise decision-ready structure: Bottom line, Three Key Strengths, Three Key Risks, Evidence Coverage Score, Evidence Coverage Score Method, Evidence Caveats, Next Step.',
+      'Evidence Coverage Score Method must explain which Tier 1 / Tier 2 sources were counted, which core documents are missing, and why the score is preliminary or review-ready.',
     ]
     : [];
 
@@ -261,7 +443,12 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     'Distinguish Power System and Water System conclusions when the package separates them.',
     'Mark any unverified value as "to be verified".',
     'Avoid overlong raw evidence dumps in the main memo; put long source details in the appendix.',
+    ...sourceAppendixRules,
     ...creditMemoRules,
+    ...investmentCommitteeRules,
+    ...ratingCommitteeRules,
+    ...documentInventoryRules,
+    ...executiveSummaryRules,
     `Audience: ${template.audience}.`,
     `Required report sections, in this order: ${template.sections.join(' | ')}.`,
     'Write in professional English unless the supplied research package is primarily Chinese.',

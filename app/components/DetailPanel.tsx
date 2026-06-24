@@ -26,7 +26,10 @@ const reportTemplates = [
   ['research-brief', 'Research Brief'],
   ['credit-memo', 'Credit Memo'],
   ['investment-committee-memo', 'Investment Committee Memo'],
+  ['rating-committee-memo', 'Rating Committee Memo'],
   ['document-inventory-report', 'Document Inventory Report'],
+  ['due-diligence-report', 'Due Diligence Report'],
+  ['board-briefing', 'Board Briefing'],
   ['executive-summary', 'Executive Summary'],
   ['risk-monitor', 'Risk Monitor'],
   ['source-appendix', 'Source Appendix'],
@@ -81,10 +84,64 @@ function workflowInput(detail: any, reportTemplate: string) {
   };
 }
 
-function markdownFor(detail: any, generatedReport: any | null) {
+function mdCell(value: any) {
+  const text = value === undefined || value === null || String(value).trim() === ''
+    ? 'Not found'
+    : String(value).trim();
+
+  return text.replace(/\|/g, '/').replace(/\n+/g, ' ');
+}
+
+function sourceValue(item: any, keys: string[]) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  return 'Not found';
+}
+
+function structuredSourceAppendixMarkdown(detail: any, evidencePackage: any, sourceStatuses: Record<string, string>) {
+  const sources = allSourceCandidates(detail, evidencePackage).slice(0, 25);
+
+  if (sources.length === 0) {
+    return [
+      '## Structured Source Appendix',
+      '',
+      'No structured source records were available for this export.',
+    ].join('\n');
+  }
+
+  const rows = sources.map((source) => [
+    sourceValue(source, ['documentType', 'document_type', 'type']),
+    sourceValue(source, ['title', 'document', 'document_title']),
+    sourceValue(source, ['publicationDate', 'publication_date', 'date']),
+    sourceValue(source, ['datedDate', 'dated_date']),
+    sourceValue(source, ['closingDate', 'closing_date']),
+    sourceValue(source, ['filingEntity', 'filing_entity', 'source']),
+    sourceValue(source, ['cusip']),
+    sourceValue(source, ['emmaSubmissionId', 'emma_submission_id']),
+    sourceValue(source, ['sourceTier', 'source_tier']),
+    sourceValue(source, ['confidenceTier', 'confidence']),
+    sourceStatuses[sourceKey(source)] ?? sourceValue(source, ['status', 'verification_status']),
+    sourceValue(source, ['url', 'source_url']),
+  ]);
+
+  return [
+    '## Structured Source Appendix',
+    '',
+    '| Document Type | Document Title | Publication / Filing Date | Dated Date | Closing Date | Filing Entity | CUSIP | EMMA Submission ID | Source Tier | Confidence | Verification Status | URL |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    ...rows.map((row) => `| ${row.map(mdCell).join(' | ')} |`),
+  ].join('\n');
+}
+
+function markdownFor(detail: any, generatedReport: any | null, sourceStatuses: Record<string, string>) {
   const title = generatedReport?.title || detail.title || 'Research Report';
   const report = generatedReport?.content || detail.snippet || '';
-  const citations = (detail.citations ?? []).map((citation: string) => `- ${citation}`).join('\n');
+  const evidencePackage = evidencePackageFor(detail);
 
   return [
     `# ${title}`,
@@ -93,8 +150,7 @@ function markdownFor(detail: any, generatedReport: any | null) {
     '',
     report,
     '',
-    '## Source Appendix',
-    citations || '- No citations available.',
+    structuredSourceAppendixMarkdown(detail, evidencePackage, sourceStatuses),
   ].join('\n');
 }
 
@@ -161,6 +217,13 @@ function allSourceCandidates(detail: any, evidencePackage: any) {
     documentType: item.document_type ?? item.type,
     recencyWindow: item.recency_window ?? item.recencyWindow,
     date: item.date,
+    publicationDate: item.publication_date ?? item.publicationDate,
+    datedDate: item.dated_date ?? item.datedDate,
+    closingDate: item.closing_date ?? item.closingDate,
+    emmaSubmissionId: item.emma_submission_id ?? item.emmaSubmissionId,
+    cusip: item.cusip,
+    filingEntity: item.filing_entity ?? item.filingEntity,
+    confidenceTier: item.confidence_tier ?? item.confidenceTier ?? item.confidence,
     status: item.status,
     notes: item.notes,
   }));
@@ -173,6 +236,13 @@ function allSourceCandidates(detail: any, evidencePackage: any) {
     documentType: item.documentType,
     recencyWindow: item.recencyWindow,
     date: item.date || item.last_updated,
+    publicationDate: item.publicationDate,
+    datedDate: item.datedDate,
+    closingDate: item.closingDate,
+    emmaSubmissionId: item.emmaSubmissionId,
+    cusip: item.cusip,
+    filingEntity: item.filingEntity,
+    confidenceTier: item.confidenceTier,
     status: item.status,
     notes: item.notes || item.snippet,
   }));
@@ -288,7 +358,7 @@ export function DetailPanel({
   ].join('_');
 
   function downloadMarkdown() {
-    downloadBlob(markdownFor(detail, generatedReport), `${filenameBase}.md`, 'text/markdown;charset=utf-8');
+    downloadBlob(markdownFor(detail, generatedReport, sourceStatuses), `${filenameBase}.md`, 'text/markdown;charset=utf-8');
   }
 
   function downloadEvidenceJson() {
@@ -305,7 +375,7 @@ export function DetailPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: generatedReport?.title || detail.title,
-        content: markdownFor(detail, generatedReport),
+        content: markdownFor(detail, generatedReport, sourceStatuses),
         filename: `${filenameBase}.docx`,
       }),
     });
@@ -327,7 +397,7 @@ export function DetailPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: generatedReport?.title || detail.title,
-        content: markdownFor(detail, generatedReport),
+        content: markdownFor(detail, generatedReport, sourceStatuses),
         filename: `${filenameBase}.pdf`,
       }),
     });
@@ -344,7 +414,7 @@ export function DetailPanel({
   }
 
   async function copyReport() {
-    await navigator.clipboard.writeText(markdownFor(detail, generatedReport));
+    await navigator.clipboard.writeText(markdownFor(detail, generatedReport, sourceStatuses));
     setCopyStatus('Copied');
     window.setTimeout(() => setCopyStatus(''), 1600);
   }

@@ -76,10 +76,28 @@ function wrapText(text: string, maxWidth: number, fontSize: number) {
   return lines.length > 0 ? lines : [''];
 }
 
+function isTableSeparator(line: string) {
+  const cells = line.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()).filter(Boolean);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function parseTableLines(lines: string[]) {
+  return lines
+    .filter((line) => !isTableSeparator(line))
+    .map((line) =>
+      line
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((cell) => stripMarkdownInline(cell))
+    )
+    .filter((row) => row.length > 1);
+}
+
 function parseMarkdown(content: string, title: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   const lines = ascii(content).replace(/\r\n/g, '\n').split('\n');
   let paragraph: string[] = [];
+  let tableLines: string[] = [];
 
   function flushParagraph() {
     if (paragraph.length > 0) {
@@ -88,13 +106,40 @@ function parseMarkdown(content: string, title: string): MarkdownBlock[] {
     }
   }
 
+  function flushTable() {
+    if (tableLines.length === 0) return;
+
+    const rows = parseTableLines(tableLines);
+    const [headers, ...body] = rows;
+
+    if (headers?.length) {
+      body.forEach((row) => {
+        const text = row
+          .map((cell, index) => `${headers[index] || `Column ${index + 1}`}: ${cell || 'Not found'}`)
+          .join('; ');
+        blocks.push({ type: 'bullet', text });
+      });
+    }
+
+    tableLines = [];
+  }
+
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
     if (!line) {
       flushParagraph();
+      flushTable();
       continue;
     }
+
+    if (line.startsWith('|') && line.endsWith('|')) {
+      flushParagraph();
+      tableLines.push(line);
+      continue;
+    }
+
+    flushTable();
 
     if (/^-{3,}$/.test(line)) {
       flushParagraph();
@@ -138,6 +183,7 @@ function parseMarkdown(content: string, title: string): MarkdownBlock[] {
   }
 
   flushParagraph();
+  flushTable();
   return blocks;
 }
 

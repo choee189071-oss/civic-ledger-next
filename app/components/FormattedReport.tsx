@@ -80,6 +80,16 @@ function renderHeading(level: number, text: string, index: number) {
   return <h4 key={key}>{content}</h4>;
 }
 
+function hasPreliminaryStatus(content: string) {
+  const opening = (content || '').slice(0, 2200).toLowerCase();
+  return (
+    opening.includes('preliminary') ||
+    opening.includes('not a credit conclusion') ||
+    opening.includes('core finance documents were not found') ||
+    opening.includes('needs manual verification')
+  );
+}
+
 function parseTable(lines: string[]) {
   return lines
     .filter((line) => !/^\|\s*-+/.test(line))
@@ -180,9 +190,18 @@ function parseBlocks(content: string): Block[] {
 
 export function FormattedReport({ content, compact = false }: Props) {
   const blocks = parseBlocks(content || '');
+  const showPreliminaryBanner = !compact && hasPreliminaryStatus(content || '');
 
   return (
     <div className={`formatted-report ${compact ? 'compact' : ''}`}>
+      {showPreliminaryBanner && (
+        <div className="report-status-banner">
+          <strong>Preliminary view</strong>
+          <span>
+            This report includes preliminary or incomplete-evidence language. Treat conclusions as review notes until required Tier 1 documents, dates, and source coverage are verified.
+          </span>
+        </div>
+      )}
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
           const level = Math.min(Math.max(block.level, 2), 4);
