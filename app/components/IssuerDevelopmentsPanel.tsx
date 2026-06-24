@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 type Props = {
   savedRecords: any[];
@@ -202,8 +202,10 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     monitoringConditions.map((condition) => condition.id)
   );
   const [isRunningGeneralUpdate, setIsRunningGeneralUpdate] = useState(false);
+  const [batchStatus, setBatchStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
   const [currentScanIssuer, setCurrentScanIssuer] = useState('');
   const [generalUpdateError, setGeneralUpdateError] = useState('');
+  const pauseRequestedRef = useRef(false);
   const sector = sectors.find((item) => item.id === sectorId) ?? sectors[0];
   const filteredIssuers = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -239,31 +241,74 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     return payload;
   }
 
-  async function runFullCcdUpdate() {
-    const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
-    setIsRunningGeneralUpdate(true);
-    setGeneralUpdateError('');
-    setCcdUpdates([]);
+  function mergeUpdate(updates: CcdUpdate[], update: CcdUpdate) {
+    return [
+      ...updates.filter((item) => item.issuer !== update.issuer),
+      update,
+    ];
+  }
 
-    const nextUpdates: CcdUpdate[] = [];
+  async function runCcdQueue(issuersToScan: string[], options?: { reset?: boolean }) {
+    if (issuersToScan.length === 0) return;
+
+    pauseRequestedRef.current = false;
+    setIsRunningGeneralUpdate(true);
+    setBatchStatus('running');
+    setGeneralUpdateError('');
+
+    let nextUpdates: CcdUpdate[] = options?.reset ? [] : [...ccdUpdates];
+    if (options?.reset) {
+      setCcdUpdates([]);
+    }
 
     try {
       for (const issuer of issuersToScan) {
+        if (pauseRequestedRef.current) {
+          setBatchStatus('paused');
+          break;
+        }
+
         setCurrentScanIssuer(issuer);
         const update = await scanIssuer(issuer);
-        nextUpdates.push(update);
+        nextUpdates = mergeUpdate(nextUpdates, update);
         setCcdUpdates([...nextUpdates]);
+      }
+
+      if (!pauseRequestedRef.current) {
+        setBatchStatus('completed');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'General CCD update failed.';
       setGeneralUpdateError(message);
+      setBatchStatus('paused');
     } finally {
       setCurrentScanIssuer('');
       setIsRunningGeneralUpdate(false);
     }
   }
 
-  function ccdReportMarkdown() {
+  function runFullCcdUpdate() {
+    const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
+    void runCcdQueue(issuersToScan, { reset: true });
+  }
+
+  function pauseCcdUpdate() {
+    pauseRequestedRef.current = true;
+    setBatchStatus('paused');
+  }
+
+  function resumeCcdUpdate() {
+    const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
+    const completed = new Set(ccdUpdates.map((item) => item.issuer));
+    void runCcdQueue(issuersToScan.filter((issuer) => !completed.has(issuer)));
+  }
+
+  function retryFailedCcdUpdate() {
+    const failedIssuers = ccdUpdates.filter((item) => item.error).map((item) => item.issuer);
+    void runCcdQueue(failedIssuers);
+  }
+
+  function ccdReportMarkdown(options?: { completedOnly?: boolean }) {
     const date = new Date().toISOString();
     const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
     const foundCount = ccdUpdates.filter((item) => /Status:\s*Development found/i.test(item.update)).length;
@@ -272,15 +317,21 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     const insufficientCount = ccdUpdates.filter((item) => /Status:\s*Insufficient public evidence/i.test(item.update)).length;
     const verificationCount = ccdUpdates.filter((item) => /Status:\s*Needs manual verification/i.test(item.update)).length;
     const scope = ccdUpdates.find((item) => item.recencyScope)?.recencyScope;
-    const body = ccdUpdates.length > 0
-      ? ccdUpdates.map((item) => item.update).join('\n\n---\n\n')
+    const queuedGaps = options?.completedOnly
+      ? []
+      : issuersToScan
+        .filter((issuer) => !ccdUpdates.some((item) => item.issuer === issuer))
+        .map((issuer) => `### ${issuer}\nStatus: Not scanned\nRecency: Not checked\nReason: This issuer was included in the selected batch but has not been scanned in this run.\nUpdate: No automated conclusion is available yet.\nSource: Pending queue item`);
+    const bodyItems = [...ccdUpdates.map((item) => item.update), ...queuedGaps];
+    const body = bodyItems.length > 0
+      ? bodyItems.join('\n\n---\n\n')
       : 'No issuer updates generated yet.';
 
     return [
       '# General CCD Update',
       '',
       `Generated: ${date}`,
-      `Coverage: ${ccdUpdates.length} of ${issuersToScan.length} selected California CCD issuers`,
+      `Coverage: ${ccdUpdates.length} of ${issuersToScan.length} selected California CCD issuers${options?.completedOnly ? ' (completed items only)' : ''}`,
       '',
       '## Executive Summary',
       '',
@@ -338,6 +389,28 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     const link = document.createElement('a');
     link.href = url;
     link.download = `general_ccd_update_${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadCcdDocx(options?: { completedOnly?: boolean }) {
+    const res = await fetch('/api/export/docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: options?.completedOnly ? 'General CCD Update - Completed Items' : 'General CCD Update',
+        content: ccdReportMarkdown(options),
+        filename: `general_ccd_update_${options?.completedOnly ? 'completed_' : ''}${new Date().toISOString().slice(0, 10)}.docx`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `general_ccd_update_${options?.completedOnly ? 'completed_' : ''}${new Date().toISOString().slice(0, 10)}.docx`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -408,13 +481,36 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately with a 3-month preferred window and 6-month fallback.
               </p>
             </div>
-            <button
-              className="button-primary"
-              onClick={runFullCcdUpdate}
-              disabled={isRunningGeneralUpdate || selectedIssuers.length === 0}
-            >
-              {isRunningGeneralUpdate ? 'Running CCD Queue...' : `Run ${selectedIssuers.length} Issuer Update`}
-            </button>
+            <div className="report-toolbar">
+              <button
+                className="button-primary"
+                onClick={runFullCcdUpdate}
+                disabled={isRunningGeneralUpdate || selectedIssuers.length === 0}
+              >
+                {isRunningGeneralUpdate ? 'Running...' : `Run ${selectedIssuers.length} Issuer Update`}
+              </button>
+              <button
+                className="button-secondary"
+                onClick={pauseCcdUpdate}
+                disabled={!isRunningGeneralUpdate}
+              >
+                Pause
+              </button>
+              <button
+                className="button-secondary"
+                onClick={resumeCcdUpdate}
+                disabled={isRunningGeneralUpdate || batchStatus !== 'paused'}
+              >
+                Resume
+              </button>
+              <button
+                className="button-secondary"
+                onClick={retryFailedCcdUpdate}
+                disabled={isRunningGeneralUpdate || !ccdUpdates.some((item) => item.error)}
+              >
+                Retry Failed
+              </button>
+            </div>
           </section>
 
           <section className="ccd-update-console">
@@ -424,13 +520,15 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 <p className="muted small">
                   {isRunningGeneralUpdate
                     ? `Scanning ${currentScanIssuer}...`
-                    : `${ccdUpdates.length} of ${selectedIssuers.length || ccdIssuers.length} selected issuers scanned`}
+                    : `${ccdUpdates.length} of ${selectedIssuers.length || ccdIssuers.length} selected issuers scanned · ${batchStatus}`}
                 </p>
               </div>
               <div className="report-toolbar">
                 <button className="button-secondary" onClick={copyCcdReport} disabled={ccdUpdates.length === 0}>Copy Report</button>
                 <button className="button-secondary" onClick={downloadCcdReport} disabled={ccdUpdates.length === 0}>Download MD</button>
                 <button className="button-secondary" onClick={downloadCcdPdf} disabled={ccdUpdates.length === 0}>Download PDF</button>
+                <button className="button-secondary" onClick={() => downloadCcdDocx()} disabled={ccdUpdates.length === 0}>Full DOCX</button>
+                <button className="button-secondary" onClick={() => downloadCcdDocx({ completedOnly: true })} disabled={ccdUpdates.length === 0}>Completed DOCX</button>
               </div>
             </div>
 

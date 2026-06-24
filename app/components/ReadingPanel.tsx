@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { htmlDocumentFromMarkdown } from './exportDocument';
 import { FormattedReport } from './FormattedReport';
 
 type Props = {
@@ -82,14 +81,6 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
     );
   }
 
-  function downloadWord() {
-    downloadBlob(
-      htmlDocumentFromMarkdown(annotatedMarkdown(title, content, annotations), title),
-      `${slug(title)}_annotated.doc`,
-      'application/msword;charset=utf-8'
-    );
-  }
-
   async function downloadPdf() {
     const res = await fetch('/api/export/pdf', {
       method: 'POST',
@@ -106,6 +97,28 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
     const link = document.createElement('a');
     link.href = url;
     link.download = `${slug(title)}_annotated.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadDocx() {
+    const res = await fetch('/api/export/docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        content: annotatedMarkdown(title, content, annotations),
+        filename: `${slug(title)}_annotated.docx`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${slug(title)}_annotated.docx`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -209,7 +222,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
           <div className="export-grid">
             <button className="button-secondary" onClick={downloadMarkdown}>Export MD</button>
             <button className="button-secondary" onClick={downloadPdf}>Export PDF</button>
-            <button className="button-secondary" onClick={downloadWord}>Export Word</button>
+            <button className="button-secondary" onClick={downloadDocx}>Export DOCX</button>
           </div>
         </aside>
       </div>

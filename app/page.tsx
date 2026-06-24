@@ -8,6 +8,7 @@ import { SourcesPanel } from './components/SourcesPanel';
 import { ReadingPanel } from './components/ReadingPanel';
 import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
 import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
+import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -75,6 +76,10 @@ function replaceSection(content: string, sectionTitle: string, replacement: stri
   ].join('\n').trim();
 }
 
+function profileKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [query, setQuery] = useState('LADWP');
@@ -95,6 +100,7 @@ export default function HomePage() {
   const [savedRecords, setSavedRecords] = useState<any[]>([]);
   const [runStatuses, setRunStatuses] = useState<Record<string, string>>({});
   const [sourceStatuses, setSourceStatuses] = useState<Record<string, string>>({});
+  const [issuerProfiles, setIssuerProfiles] = useState<Record<string, any>>({});
   const [reportVersions, setReportVersions] = useState<Record<string, any[]>>({});
   const [readingAnnotations, setReadingAnnotations] = useState<Record<string, any[]>>({});
   const [storageReady, setStorageReady] = useState(false);
@@ -290,6 +296,14 @@ export default function HomePage() {
   function updateSourceStatus(key: string, status: string) {
     if (!key) return;
     setSourceStatuses((statuses) => ({ ...statuses, [key]: status }));
+  }
+
+  function saveIssuerProfile(profile: any) {
+    if (!profile?.issuer) return;
+    setIssuerProfiles((profiles) => ({
+      ...profiles,
+      [profileKey(profile.issuer)]: profile,
+    }));
   }
 
   function updateReportContent(content: string) {
@@ -534,6 +548,10 @@ export default function HomePage() {
     if (storedSourceStatuses) {
       setSourceStatuses(JSON.parse(storedSourceStatuses));
     }
+    const storedIssuerProfiles = window.localStorage.getItem('civic-ledger-issuer-profiles');
+    if (storedIssuerProfiles) {
+      setIssuerProfiles(JSON.parse(storedIssuerProfiles));
+    }
     const storedVersions = window.localStorage.getItem('civic-ledger-report-versions');
     if (storedVersions) {
       setReportVersions(JSON.parse(storedVersions));
@@ -556,6 +574,11 @@ export default function HomePage() {
     if (!storageReady) return;
     window.localStorage.setItem('civic-ledger-source-statuses', JSON.stringify(sourceStatuses));
   }, [sourceStatuses, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-issuer-profiles', JSON.stringify(issuerProfiles));
+  }, [issuerProfiles, storageReady]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -617,6 +640,7 @@ export default function HomePage() {
               reportTemplate={reportTemplate}
               generatedReport={generatedReport}
               reportVersions={detail ? reportVersions[detail.id] ?? [] : []}
+              sourceStatuses={sourceStatuses}
               runStatus={detail ? runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail) : 'Draft'}
               isGeneratingReport={isGeneratingReport}
               reportError={reportError}
@@ -645,6 +669,14 @@ export default function HomePage() {
           <IssuerDevelopmentsPanel
             savedRecords={savedRecords}
             onRunIssuerScan={startIssuerDevelopmentScan}
+          />
+        )}
+        {view === 'profiles' && (
+          <IssuerProfilesPanel
+            profiles={issuerProfiles}
+            savedRecords={savedRecords}
+            currentRecord={detail}
+            onSaveProfile={saveIssuerProfile}
           />
         )}
         {view === 'sources' && (

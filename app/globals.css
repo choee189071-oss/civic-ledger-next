@@ -832,6 +832,37 @@ h3 {
   font-weight: 720;
 }
 
+.section-workflow-row {
+  align-items: start;
+}
+
+.section-inline-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 8px;
+}
+
+.section-inline-fields input,
+.profile-form input,
+.profile-form textarea {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font: inherit;
+  min-height: 34px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .compare-grid {
   display: grid;
   gap: 12px;
@@ -1564,6 +1595,30 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.profile-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
+.profile-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-form label {
+  color: var(--color-muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 780;
+  gap: 6px;
+}
+
+.profile-notes {
+  margin-top: 12px;
+}
+
 .track-grid {
   display: grid;
   gap: 12px;
@@ -1623,7 +1678,8 @@ h3 {
   .workspace-grid,
   .source-grid,
   .reading-workspace,
-  .developments-layout {
+  .developments-layout,
+  .profile-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1654,6 +1710,11 @@ h3 {
   .action-row,
   .status-strip {
     align-items: stretch;
+  }
+
+  .profile-form-grid,
+  .section-inline-fields {
+    grid-template-columns: 1fr;
   }
 
   .button-primary,

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { htmlDocumentFromMarkdown } from './exportDocument';
 import { FormattedReport } from './FormattedReport';
 
 type Props = {
@@ -9,6 +8,7 @@ type Props = {
   reportTemplate: string;
   generatedReport: any | null;
   reportVersions: any[];
+  sourceStatuses: Record<string, string>;
   runStatus: string;
   isGeneratingReport: boolean;
   reportError: string | null;
@@ -148,11 +148,102 @@ function reportSections(content: string) {
   return sections.filter((section) => section.content);
 }
 
+function sourceKey(item: any) {
+  return (item.url || item.source_url || item.title || item.document || '').toLowerCase();
+}
+
+function allSourceCandidates(detail: any, evidencePackage: any) {
+  const inventory = (evidencePackage?.document_inventory ?? detail.documentInventory ?? []).map((item: any) => ({
+    title: item.title ?? item.document,
+    url: item.source_url ?? item.url,
+    sourceTier: item.source_tier ?? item.sourceTier,
+    sourceTierRank: item.sourceTierRank,
+    documentType: item.document_type ?? item.type,
+    recencyWindow: item.recency_window ?? item.recencyWindow,
+    date: item.date,
+    status: item.status,
+    notes: item.notes,
+  }));
+
+  const live = (detail.searchResults ?? []).map((item: any) => ({
+    title: item.title,
+    url: item.url,
+    sourceTier: item.sourceTier,
+    sourceTierRank: item.sourceTierRank,
+    documentType: item.documentType,
+    recencyWindow: item.recencyWindow,
+    date: item.date || item.last_updated,
+    status: item.status,
+    notes: item.notes || item.snippet,
+  }));
+
+  const seen = new Set<string>();
+  return [...inventory, ...live].filter((item) => {
+    const key = sourceKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function incrementCount(counts: Record<string, number>, key: string) {
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function sourceConfidence(item: any) {
+  if ((item.sourceTierRank ?? 4) <= 1 || String(item.sourceTier ?? '').startsWith('Tier 1')) return 'High';
+  if ((item.sourceTierRank ?? 4) <= 2 || String(item.sourceTier ?? '').startsWith('Tier 2')) return 'Medium';
+  return 'Low';
+}
+
+function evidenceQualitySummary(detail: any, evidencePackage: any, sourceStatuses: Record<string, string>) {
+  const sources = allSourceCandidates(detail, evidencePackage);
+  const tierCounts: Record<string, number> = {};
+  const recencyCounts: Record<string, number> = {};
+  const verificationCounts: Record<string, number> = {};
+  const confidenceCounts: Record<string, number> = {};
+
+  sources.forEach((source) => {
+    incrementCount(tierCounts, source.sourceTier || 'Unclassified');
+    incrementCount(recencyCounts, source.recencyWindow || 'Undated source');
+    incrementCount(verificationCounts, sourceStatuses[sourceKey(source)] ?? source.status ?? 'Candidate');
+    incrementCount(confidenceCounts, sourceConfidence(source));
+  });
+
+  const noUpdateSignals = [
+    detail.snippet,
+    ...(detail.facts ?? []),
+    ...(evidencePackage?.missing_items ?? []),
+  ].join(' ');
+  const reason = /No recent change found/i.test(noUpdateSignals)
+    ? 'No recent change found'
+    : /Stale source only/i.test(noUpdateSignals)
+      ? 'Stale source only'
+      : /Insufficient public evidence/i.test(noUpdateSignals)
+        ? 'Insufficient public evidence'
+        : /Needs manual verification/i.test(noUpdateSignals)
+          ? 'Needs manual verification'
+          : evidencePackage?.missing_items?.length
+            ? 'Missing source coverage'
+            : 'Evidence available for review';
+
+  return {
+    totalSources: sources.length,
+    tierCounts,
+    recencyCounts,
+    verificationCounts,
+    confidenceCounts,
+    reason,
+    missingItems: evidencePackage?.missing_items ?? [],
+  };
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
   generatedReport,
   reportVersions,
+  sourceStatuses,
   runStatus,
   isGeneratingReport,
   reportError,
@@ -169,6 +260,12 @@ export function DetailPanel({
   const [copyStatus, setCopyStatus] = useState('');
   const [isEditingReport, setIsEditingReport] = useState(false);
   const [compareVersionId, setCompareVersionId] = useState('');
+  const [sectionWorkflow, setSectionWorkflow] = useState<Record<string, {
+    verified?: boolean;
+    locked?: boolean;
+    source?: string;
+    note?: string;
+  }>>({});
 
   if (!detail) {
     return (
@@ -182,6 +279,7 @@ export function DetailPanel({
 
   const input = workflowInput(detail, reportTemplate);
   const evidencePackage = evidencePackageFor(detail);
+  const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const filenameBase = [
     slug(detail.title || 'issuer'),
     slug(detail.researchModeLabel || detail.topic || 'research'),
@@ -201,12 +299,26 @@ export function DetailPanel({
     );
   }
 
-  function downloadWord() {
-    const html = htmlDocumentFromMarkdown(
-      markdownFor(detail, generatedReport),
-      generatedReport?.title || detail.title || 'Research Report'
-    );
-    downloadBlob(html, `${filenameBase}.doc`, 'application/msword;charset=utf-8');
+  async function downloadDocx() {
+    const res = await fetch('/api/export/docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: generatedReport?.title || detail.title,
+        content: markdownFor(detail, generatedReport),
+        filename: `${filenameBase}.docx`,
+      }),
+    });
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filenameBase}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function downloadPdf() {
@@ -235,6 +347,21 @@ export function DetailPanel({
     await navigator.clipboard.writeText(markdownFor(detail, generatedReport));
     setCopyStatus('Copied');
     window.setTimeout(() => setCopyStatus(''), 1600);
+  }
+
+  function updateSectionWorkflow(sectionTitle: string, patch: {
+    verified?: boolean;
+    locked?: boolean;
+    source?: string;
+    note?: string;
+  }) {
+    setSectionWorkflow((workflow) => ({
+      ...workflow,
+      [sectionTitle]: {
+        ...(workflow[sectionTitle] ?? {}),
+        ...patch,
+      },
+    }));
   }
 
   return (
@@ -299,6 +426,55 @@ export function DetailPanel({
           <section className="answer-section">
             <h3>Discovery memo</h3>
             <FormattedReport content={detail.snippet} compact />
+          </section>
+
+          <section className="answer-section">
+            <h3>Evidence quality dashboard</h3>
+            <div className="key-value-grid">
+              <div>
+                <span>Total sources</span>
+                <strong>{evidenceQuality.totalSources}</strong>
+              </div>
+              <div>
+                <span>Verification reason</span>
+                <strong>{evidenceQuality.reason}</strong>
+              </div>
+              <div>
+                <span>High confidence</span>
+                <strong>{evidenceQuality.confidenceCounts.High ?? 0}</strong>
+              </div>
+              <div>
+                <span>Needs follow-up</span>
+                <strong>{(evidenceQuality.verificationCounts.Missing ?? 0) + (evidenceQuality.verificationCounts.Candidate ?? 0)}</strong>
+              </div>
+            </div>
+            <div className="mini-table evidence-quality-table">
+              <div className="mini-table-row header">
+                <span>Dimension</span>
+                <span>Breakdown</span>
+                <span>Why it matters</span>
+              </div>
+              <div className="mini-table-row">
+                <span>Source tier</span>
+                <span>{Object.entries(evidenceQuality.tierCounts).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No sources'}</span>
+                <span>Tier 1/2 evidence should anchor finance conclusions.</span>
+              </div>
+              <div className="mini-table-row">
+                <span>Recency</span>
+                <span>{Object.entries(evidenceQuality.recencyCounts).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No dates'}</span>
+                <span>Recent items should be separated from older context.</span>
+              </div>
+              <div className="mini-table-row">
+                <span>Verification status</span>
+                <span>{Object.entries(evidenceQuality.verificationCounts).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No status'}</span>
+                <span>Candidate and missing items require review before delivery.</span>
+              </div>
+              <div className="mini-table-row">
+                <span>Confidence</span>
+                <span>{Object.entries(evidenceQuality.confidenceCounts).map(([key, value]) => `${key}: ${value}`).join(' | ') || 'No confidence score'}</span>
+                <span>Confidence combines source tier and review status.</span>
+              </div>
+            </div>
           </section>
 
           {detail.searchQueries?.length > 0 && (
@@ -452,15 +628,48 @@ export function DetailPanel({
                 </div>
                 <div className="section-list">
                   {reportSections(generatedReport.content).map((section) => (
-                    <div key={section.title} className="section-row">
-                      <span>{section.title}</span>
-                      <button
-                        className="button-secondary"
-                        onClick={() => onRegenerateSection(section.title, section.content)}
-                        disabled={isGeneratingReport}
-                      >
-                        Regenerate
-                      </button>
+                    <div key={section.title} className="section-row section-workflow-row">
+                      <div>
+                        <span>{section.title}</span>
+                        <div className="record-meta">
+                          <span>{sectionWorkflow[section.title]?.verified ? 'Verified' : 'Draft'}</span>
+                          <span>{sectionWorkflow[section.title]?.locked ? 'Locked' : 'Editable'}</span>
+                          {sectionWorkflow[section.title]?.source && <span>Source attached</span>}
+                        </div>
+                        <div className="section-inline-fields">
+                          <input
+                            value={sectionWorkflow[section.title]?.source ?? ''}
+                            onChange={(event) => updateSectionWorkflow(section.title, { source: event.target.value })}
+                            placeholder="Add source URL or source note"
+                          />
+                          <input
+                            value={sectionWorkflow[section.title]?.note ?? ''}
+                            onChange={(event) => updateSectionWorkflow(section.title, { note: event.target.value })}
+                            placeholder="Reviewer note"
+                          />
+                        </div>
+                      </div>
+                      <div className="section-actions">
+                        <button
+                          className="button-secondary"
+                          onClick={() => updateSectionWorkflow(section.title, { verified: !sectionWorkflow[section.title]?.verified })}
+                        >
+                          {sectionWorkflow[section.title]?.verified ? 'Unverify' : 'Mark Verified'}
+                        </button>
+                        <button
+                          className="button-secondary"
+                          onClick={() => updateSectionWorkflow(section.title, { locked: !sectionWorkflow[section.title]?.locked })}
+                        >
+                          {sectionWorkflow[section.title]?.locked ? 'Unlock' : 'Lock'}
+                        </button>
+                        <button
+                          className="button-secondary"
+                          onClick={() => onRegenerateSection(section.title, section.content)}
+                          disabled={isGeneratingReport || sectionWorkflow[section.title]?.locked}
+                        >
+                          Regenerate
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -521,7 +730,7 @@ export function DetailPanel({
           <div className="export-grid">
             <button className="button-secondary" onClick={downloadMarkdown}>Download Markdown</button>
             <button className="button-secondary" onClick={downloadPdf}>Download PDF</button>
-            <button className="button-secondary" onClick={downloadWord}>Download Word</button>
+            <button className="button-secondary" onClick={downloadDocx}>Download DOCX</button>
             <button className="button-secondary" onClick={downloadEvidenceJson}>Download Evidence JSON</button>
             <button className="button-secondary" onClick={copyReport}>Copy to Clipboard</button>
             <button className="button-primary" onClick={onSave}>{isSaved ? 'Saved to Library' : 'Save to Research Library'}</button>
