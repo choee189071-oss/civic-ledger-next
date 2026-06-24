@@ -76,7 +76,7 @@ const promptModes = [
 
 const outputTypes = [
   ['research-brief', 'Research Brief'],
-  ['credit-memo', 'Credit Memo'],
+  ['credit-memo', 'Professional Credit Memo'],
   ['investment-committee-memo', 'Investment Committee Memo'],
   ['rating-committee-memo', 'Rating Committee Memo'],
   ['document-inventory-report', 'Document Inventory Report'],
@@ -105,7 +105,7 @@ const workflowOptionLabels = [
 
 const quickStarts = [
   {
-    label: 'Credit Memo',
+    label: 'Professional Credit Memo',
     description: 'Issuer profile, debt, ratings, covenants',
     promptMode: 'issuer-credit-profile',
     reportTemplate: 'credit-memo',
@@ -312,12 +312,22 @@ export function SearchPanel(props: Props) {
         <button
           className="icon-button primary"
           aria-label="Run research search"
+          type="button"
           disabled={props.isResearching}
           onClick={() => props.onSearch()}
         >
           {props.isResearching ? '…' : '⌕'}
         </button>
       </div>
+      {props.isResearching && (
+        <div className="loading-card" role="status" aria-live="polite">
+          <span className="loading-spinner" />
+          <div>
+            <strong>Building research package</strong>
+            <p>Checking live sources, document coverage, evidence quality, and memo-ready findings.</p>
+          </div>
+        </div>
+      )}
       <div className="shortcut-strip" aria-label="Keyboard shortcuts">
         <span><kbd>/</kbd> Search</span>
         <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick Search</span>
@@ -374,7 +384,11 @@ export function SearchPanel(props: Props) {
       </div>
 
       {props.researchError && (
-        <div className="error-banner">{props.researchError}</div>
+        <div className="error-banner" role="alert">
+          <strong>Research could not complete.</strong>
+          <span>{props.researchError}</span>
+          <em>Try a broader issuer name, upload the source PDF, or check API keys before rerunning.</em>
+        </div>
       )}
 
       <div className="prompt-builder">
@@ -490,7 +504,17 @@ export function SearchPanel(props: Props) {
       {props.tab === 'results' && (
         <div className="result-list">
           {props.items.length === 0 && (
-            <p className="muted">No results match the current query.</p>
+            <div className="empty-card">
+              <p className="eyebrow">No workspace yet</p>
+              <h3>Search an issuer to begin a credit research run.</h3>
+              <p className="muted">
+                Try an issuer name, alias, CUSIP, sector, bond type, state, or natural-language risk question. The platform will build document coverage, retrieval diagnostics, evidence quality, and a memo-ready research package.
+              </p>
+              <div className="empty-action-row">
+                <button type="button" onClick={() => props.onQuery('LADWP')}>Try LADWP</button>
+                <button type="button" onClick={() => props.onQuery('California Water Revenue Bond')}>Try California Water</button>
+              </div>
+            </div>
           )}
           {props.items.map((item) => {
             const snapshot = issuerSnapshotFor(item);

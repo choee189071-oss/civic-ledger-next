@@ -181,7 +181,7 @@ function evidencePackageForRecord(result: DocumentParseResult) {
   return {
     issuer: result.issuer || result.title,
     research_mode: 'Document-to-Report Pipeline',
-    output_type: 'Credit Memo',
+    output_type: 'Professional Credit Memo',
     search_timestamp: result.parsedAt,
     parser: result.parser,
     document_kind: result.evidencePackage.documentKind,
@@ -224,7 +224,7 @@ function reportContent(result: DocumentParseResult) {
   const missing = result.evidencePackage.missingFields;
 
   return [
-    `# Credit Memo: ${result.issuer || result.title}`,
+    `# Professional Credit Memo: ${result.issuer || result.title}`,
     '',
     '**Status:** Preliminary document-derived memo. This is not a final credit conclusion until source origin, dollar amounts, dates, ratings, CUSIPs, and covenant calculations are verified.',
     '',
@@ -248,20 +248,34 @@ function reportContent(result: DocumentParseResult) {
       `The extraction focused on: ${result.focus.join(', ')}.`,
       `This memo converts the parsed material into finance workflow sections, with missing items preserved for analyst follow-up.`,
     ]),
-    memoSection('Financial Performance', [
+    memoSection('Credit Strengths', [
+      '- Parser-derived strengths should be treated as preliminary until verified against the original PDF and current issuer disclosures.',
+      compactEvidence(findingEvidence(result, /liquidity|coverage|revenue|management|capital|rate covenant/i), 700),
+    ]),
+    memoSection('Credit Weaknesses', [
+      '- Parser-derived weaknesses focus on missing evidence, unresolved covenant verification, and any risk language surfaced in the uploaded document.',
+      missing.length
+        ? missing.map((item) => `- ${item}: not found in parsed PDF.`).join('\n')
+        : '- No parser-level missing fields were flagged, but analyst verification is still required.',
+    ]),
+    memoSection('Financial Analysis', [
       compactEvidence(findingEvidence(result, /operating revenue|statement of net position|updated financial metrics/i), 900),
     ]),
     memoSection('Liquidity', [
       compactEvidence(findingEvidence(result, /cash and investments|liquidity/i), 900),
     ]),
-    memoSection('Debt Profile', [
+    memoSection('Debt', [
       compactEvidence(findingEvidence(result, /long-term debt|debt service schedule|outstanding debt/i), 900),
     ]),
-    memoSection('Debt Service Coverage and Covenants', [
+    memoSection('Legal Security and Covenants', [
       `Debt Service Coverage: ${values.dsc}.`,
       `Rate Covenant: ${values.rateCovenant}.`,
       `Additional Bonds Test: ${values.additionalBondsTest}.`,
       'Conclusion status: preliminary. Confirm calculations and legal covenant language against the original PDF and any current EMMA filings.',
+    ]),
+    memoSection('Recommendation', [
+      'Recommendation status: Needs Manual Verification.',
+      'Rationale: document-derived evidence is useful for drafting, but current filings, ratings, CUSIP data, and covenant calculations must be verified before a credit conclusion.',
     ]),
     memoSection('Missing Information', missing.length
       ? missing.map((item) => `- ${item}: not found in parsed PDF.`)
@@ -272,7 +286,7 @@ function reportContent(result: DocumentParseResult) {
       '- Mark each source as Used in Report, Candidate, Missing, or Rejected in Source list.',
       '- Regenerate individual report sections after attaching additional Tier 1 evidence.',
     ]),
-    memoSection('Source Appendix', [
+    memoSection('Evidence Appendix', [
       '| Document Type | Document Title | Publication / Filing Date | Filing Entity | CUSIP | EMMA Submission ID | Source Tier | Verification Status | URL |',
       '|---|---|---|---|---|---|---|---|---|',
       `| ${inventory.document_type} | ${inventory.title} | ${inventory.publication_date} | ${inventory.filing_entity} | ${inventory.cusip} | ${inventory.emma_submission_id} | ${inventory.source_tier} | ${inventory.status} | ${inventory.source_url || inventory.source} |`,
@@ -289,8 +303,8 @@ export function buildDocumentWorkflow(result: DocumentParseResult): DocumentWork
   const report = {
     id: `report-${id}`,
     template: 'credit-memo',
-    templateLabel: 'Credit Memo',
-    title: `Credit Memo: ${result.issuer || result.title}`,
+    templateLabel: 'Professional Credit Memo',
+    title: `Professional Credit Memo: ${result.issuer || result.title}`,
     content: reportContent(result),
     generatedAt: new Date().toISOString(),
     model: 'LlamaParse deterministic pipeline',

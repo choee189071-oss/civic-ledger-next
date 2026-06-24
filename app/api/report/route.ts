@@ -34,39 +34,42 @@ const REPORT_TEMPLATES = {
     ],
   },
   'credit-memo': {
-    label: 'Credit Memo',
+    label: 'Professional Credit Memo',
     audience: 'public finance credit analyst preparing an issuer memo',
     sections: [
       'Credit Snapshot',
-      'Preliminary Credit View',
       'Executive Summary',
       'Issuer Overview',
-      'Credit Factors',
-      'Ratings and Recent Actions',
       'Credit Strengths',
-      'Credit Risks',
-      'Financial Performance',
-      'Debt Service Coverage and Covenants',
-      'Debt Profile',
-      'Capital Plan',
-      'Outlook / Monitoring Items',
+      'Credit Weaknesses',
+      'Financial Analysis',
+      'Debt',
+      'Liquidity',
+      'Legal Security and Covenants',
+      'Ratings and Market Context',
+      'Recommendation',
       'Missing Information',
-      'Recommended Next Steps',
-      'Source Appendix',
+      'Evidence Appendix',
     ],
   },
   'investment-committee-memo': {
     label: 'Investment Committee Memo',
     audience: 'investment committee evaluating whether to advance or monitor a credit',
     sections: [
+      'Decision Request',
+      'Executive Summary',
       'Recommendation',
       'Investment Thesis',
+      'Issuer and Security Overview',
       'Key Credit Drivers',
+      'Financial Analysis',
+      'Debt and Liquidity Review',
       'Downside Risks',
       'Relative Value / Benchmark Analysis',
       'Comparable Bond List',
+      'Portfolio Fit and Monitoring Plan',
       'Required Follow-Up',
-      'Source Appendix',
+      'Evidence Appendix',
     ],
   },
   'document-inventory-report': {
@@ -87,16 +90,19 @@ const REPORT_TEMPLATES = {
     audience: 'rating committee reviewing an issuer or obligor credit profile',
     sections: [
       'Rating Question',
-      'Analytical Summary',
+      'Executive Summary',
+      'Proposed Analytical View',
       'Indicative Scorecard',
       'Anchor Rating and Modifiers',
       'Business / Enterprise Profile',
       'Financial Profile',
       'Debt and Legal Security',
+      'Liquidity and Financial Flexibility',
       'Key Strengths',
       'Key Risks',
       'Potential Rating Drivers',
       'Information Gaps',
+      'Evidence Appendix',
     ],
   },
   'due-diligence-report': {
@@ -526,7 +532,16 @@ function compactRecord(record: any, templateKey: ReportTemplate) {
 }
 
 function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate], templateKey: ReportTemplate) {
+  const professionalMemoRules = [
+    'Write as a professional municipal credit work product, not as a chatbot answer.',
+    'Begin with a compact memo header table when the template is Credit Memo, Investment Committee Memo, or Rating Committee Memo. Include Issuer, Sector, State, Security / pledge, Requested action, Status, Evidence coverage, Confidence, Prepared date, and Analyst follow-up owner if found.',
+    'Use decision-useful bullets. A bullet should normally be one sentence and should include the source or evidence status when material.',
+    'Use tables for snapshots, metrics, comparable bonds, scorecards, document coverage, missing evidence, and evidence appendix.',
+    'Keep the main memo concise. Put long URL lists, source metadata, and raw evidence in Evidence Appendix.',
+    'For every section, distinguish: Verified facts, Analyst interpretation, Gaps / next checks.',
+  ];
   const sourceAppendixRules = [
+    'When the required section is named Evidence Appendix, treat it as the formal Source Appendix and use the same structured table standard.',
     'Format every Source Appendix as a structured table with these columns: Document type, Document title, Publication / filing date, Dated date, Closing date, Filing entity, CUSIP, EMMA submission ID, Confidence tier, Verification status, URL.',
     'If a Source Appendix field is not found, write "Not found" rather than leaving it blank.',
     'For EMMA/MSRB sources, include EMMA filing date and submission ID when available. If unavailable, say "Not found".',
@@ -534,24 +549,41 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
   ];
   const creditMemoRules = templateKey === 'credit-memo'
     ? [
-      'For Credit Memo, include a top-level Credit Snapshot with exactly these fields: Issuer, Sector, Systems, State, Revenue pledge, Research mode, Evidence coverage score, Preliminary view, Confidence, Debt Service Coverage (DSC), Rate Covenant, Additional Bonds Test, CUSIP, Last EMMA filing date, Primary risks, Primary strengths, Final recommendation status.',
+      'For Credit Memo, the report must read like a professional credit memo. Required top-level sections: Executive Summary, Credit Strengths, Credit Weaknesses, Financial Analysis, Debt, Liquidity, Recommendation, Evidence Appendix.',
+      'Credit Snapshot must include exactly these fields: Issuer, Sector, Systems, State, Revenue pledge, Research mode, Evidence coverage score, Preliminary view, Confidence, Debt Service Coverage (DSC), Rate Covenant, Additional Bonds Test, CUSIP, Last EMMA filing date, Primary risks, Primary strengths, Recommendation status.',
       'For DSC, Rate Covenant, Additional Bonds Test, CUSIP, and Last EMMA filing date, use the value from the package or write "Not found".',
-      'In Debt Service Coverage and Covenants, explicitly discuss DSC, rate covenant status, additional bonds test status, debt service schedule availability, and whether covenant conclusions are supported by Tier 1 evidence.',
+      'Executive Summary must contain: Bottom line, what changed, evidence coverage, recommendation status, and top three follow-up items.',
+      'Credit Strengths and Credit Weaknesses must each use a table with Driver, Evidence, Credit impact, Confidence.',
+      'Financial Analysis must cover revenue, expenses, margins / coverage, liquidity, capital spending, and trend direction. Use "Not found" where metrics are unavailable.',
+      'Debt must cover outstanding debt, security / pledge, debt service schedule availability, near-term maturities, additional bonds test, and covenant evidence.',
+      'Liquidity must cover cash / reserves, days cash or reserve days if found, unrestricted liquidity evidence, and manual verification needs.',
+      'Recommendation must be one of: Advance, Monitor, Hold for Documents, Needs Manual Verification, or Not Enough Evidence. Explain why.',
+      'In Legal Security and Covenants, explicitly discuss DSC, rate covenant status, additional bonds test status, debt service schedule availability, and whether covenant conclusions are supported by Tier 1 evidence.',
       'For Preliminary view, avoid final recommendations unless required Tier 1 documents are found. If evidence is incomplete, mark the view preliminary and explain the missing documents.',
     ]
     : [];
   const investmentCommitteeRules = templateKey === 'investment-committee-memo'
     ? [
+      'For Investment Committee Memo, write for a committee decision. Required sections: Decision Request, Executive Summary, Recommendation, Investment Thesis, Key Credit Drivers, Downside Risks, Relative Value / Benchmark Analysis, Comparable Bond List, Portfolio Fit and Monitoring Plan, Evidence Appendix.',
+      'Decision Request must clearly state what the committee is being asked to do: approve, decline, monitor, continue diligence, or review after missing evidence is obtained.',
+      'Recommendation must include: recommended action, rationale, conditions precedent, key risks to underwrite, and monitoring trigger.',
+      'Investment Thesis must separate Base Case, Upside / support factors, and Downside / risk case.',
       'For Investment Committee Memo, include Relative Value / Benchmark Analysis with Spread to MMD / benchmark, yield / spread date, maturity context, rating context, and whether the data is current or not found.',
       'Include a Comparable Bond List table with Issuer, Sector, Security, Rating, Maturity, Coupon / Yield if found, Spread to MMD / benchmark if found, Source, and Notes.',
       'If comparable bond data is unavailable, say "Comparable bond data not found in the supplied package" and list the exact follow-up data needed.',
+      'Portfolio Fit and Monitoring Plan must include exposure fit, watchlist triggers, required documents, and next review date if found.',
     ]
     : [];
   const ratingCommitteeRules = templateKey === 'rating-committee-memo'
     ? [
+      'For Rating Committee Memo, write for a rating committee file. Required sections: Rating Question, Executive Summary, Proposed Analytical View, Indicative Scorecard, Anchor Rating and Modifiers, Business / Enterprise Profile, Financial Profile, Debt and Legal Security, Liquidity and Financial Flexibility, Key Strengths, Key Risks, Potential Rating Drivers, Information Gaps, Evidence Appendix.',
+      'Rating Question must state the analytical question and whether this is a preliminary view, surveillance update, new issue review, or information-gap review.',
+      'Proposed Analytical View must avoid asserting a real agency rating action unless the package supplies agency evidence.',
       'For Rating Committee Memo, include an Indicative Scorecard table covering Business Profile and Financial Profile subfactors, score / assessment, evidence, and confidence.',
       'Include Anchor Rating and Modifiers showing the preliminary anchor, upward / downward modifiers, information gaps, and final rating view status.',
+      'Indicative Scorecard must include these rows when applicable: Economic / service area profile, market position, governance / management, revenue framework, expense flexibility, liquidity, debt burden, pension / OPEB, legal security, capital plan.',
       'Do not state an actual rating action unless the package contains rating agency evidence. Mark all unsupported ratings as preliminary analytical indications.',
+      'Potential Rating Drivers must separate upgrade / positive drivers, downgrade / negative drivers, and stable-monitoring factors.',
     ]
     : [];
   const documentInventoryRules = templateKey === 'document-inventory-report'
@@ -620,6 +652,7 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     'Distinguish Power System and Water System conclusions when the package separates them.',
     'Mark any unverified value as "to be verified".',
     'Avoid overlong raw evidence dumps in the main memo; put long source details in the appendix.',
+    ...professionalMemoRules,
     ...sourceAppendixRules,
     ...creditMemoRules,
     ...investmentCommitteeRules,

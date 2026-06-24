@@ -173,6 +173,7 @@ export default function HomePage() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState('Autosave ready');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   async function loadSearch(
     nextQuery = query,
@@ -834,6 +835,10 @@ export default function HomePage() {
     if (storedFavorites) {
       setFavorites(JSON.parse(storedFavorites));
     }
+    const storedTheme = window.localStorage.getItem('civic-ledger-theme');
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      setTheme(storedTheme);
+    }
     setStorageReady(true);
     loadSources();
     loadSearch();
@@ -873,6 +878,11 @@ export default function HomePage() {
     if (!storageReady) return;
     window.localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites));
   }, [favorites, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem('civic-ledger-theme', theme);
+  }, [theme, storageReady]);
 
   useEffect(() => {
     function focusSearch(select = false) {
@@ -920,9 +930,17 @@ export default function HomePage() {
   const activeIssuerPinned = Boolean(detail && isFavorite('issuer', activeIssuerTitle, detail.id));
   const activeReportPinned = Boolean(detail && generatedReport && isFavorite('report', activeReportTitle, detail.id));
   const activeDocumentPinned = Boolean(detail && isFavorite('document', activeDocumentTitle, detail.id));
+  const isBusy = isResearching || isGeneratingReport;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
+      <a href="#main-workspace" className="skip-link">Skip to workspace</a>
+      {isBusy && (
+        <div className="global-loading" role="status" aria-live="polite">
+          <span />
+          <strong>{isResearching ? 'Running issuer research...' : 'Generating professional memo...'}</strong>
+        </div>
+      )}
       <Sidebar
         current={view}
         onChange={setView}
@@ -932,7 +950,7 @@ export default function HomePage() {
         onOpenRecent={openRecentWorkspace}
         onOpenFavorite={openFavorite}
       />
-      <main className="main">
+      <main id="main-workspace" className="main" aria-busy={isBusy}>
         <header className="workspace-header">
           <div className="workspace-title">
             <p className="eyebrow">Research Workspace</p>
@@ -943,7 +961,7 @@ export default function HomePage() {
             <div className="hero-workflow-list" aria-label="Core municipal credit research workflow">
               <span>Search issuers</span>
               <span>Analyze financial statements</span>
-              <span>Generate Credit Memo</span>
+              <span>Generate professional memo</span>
               <span>Monitor market risks</span>
               <span>Export evidence-backed reports</span>
             </div>
@@ -968,7 +986,15 @@ export default function HomePage() {
               </div>
             </div>
             <div className="header-actions">
-              <span className="status-pill ready">{autosaveStatus}</span>
+              <span className="status-pill ready" aria-live="polite">{autosaveStatus}</span>
+              <button
+                className="button-secondary theme-toggle"
+                type="button"
+                aria-pressed={theme === 'dark'}
+                onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+              >
+                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              </button>
               <button className="button-secondary" onClick={() => setView('search')}>Search Issuer</button>
               <button className="button-secondary" onClick={() => setView('documents')}>Upload Documents</button>
               <button className="button-secondary" onClick={() => void runResearch()} disabled={isResearching}>

@@ -40,7 +40,7 @@ type Props = {
 
 const reportTemplates = [
   ['research-brief', 'Research Brief'],
-  ['credit-memo', 'Credit Memo'],
+  ['credit-memo', 'Professional Credit Memo'],
   ['investment-committee-memo', 'Investment Committee Memo'],
   ['rating-committee-memo', 'Rating Committee Memo'],
   ['document-inventory-report', 'Document Inventory Report'],
@@ -823,7 +823,21 @@ export function DetailPanel({
       <section className="workspace-panel answer-panel empty-state">
         <p className="eyebrow">Workflow</p>
         <h2>Research workflow</h2>
-        <p className="muted">Select a research result to prepare a deliverable.</p>
+        <p className="muted">Search an issuer or upload a document to create a reusable research workspace.</p>
+        <div className="empty-state-grid" aria-label="Research workflow acceptance steps">
+          <div>
+            <strong>1. Find documents</strong>
+            <span>ACFR, OS/POS, EMMA filings, ratings, budget, board packets.</span>
+          </div>
+          <div>
+            <strong>2. Diagnose coverage</strong>
+            <span>See missing documents, failed retrieval paths, source tier, and confidence.</span>
+          </div>
+          <div>
+            <strong>3. Generate work product</strong>
+            <span>Create a professional memo with evidence appendix and citations.</span>
+          </div>
+        </div>
       </section>
     );
   }
@@ -1065,6 +1079,16 @@ export function DetailPanel({
           </button>
         ))}
       </div>
+
+      {isGeneratingReport && (
+        <div className="loading-card" role="status" aria-live="polite">
+          <span className="loading-spinner" />
+          <div>
+            <strong>Generating professional memo</strong>
+            <p>Structuring credit analysis, evidence appendix, confidence notes, and follow-up questions.</p>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'discovery' && (
         <>
