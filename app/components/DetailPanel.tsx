@@ -9,6 +9,7 @@ import {
   sourceCandidatesFromRecord,
 } from '../../lib/research-diagnostics';
 import { buildEvidenceEngine, type EvidenceCoverage } from '../../lib/evidence-engine';
+import { buildResearchWorkspace, type ResearchWorkspace } from '../../lib/research-workspace';
 
 type Props = {
   detail: any;
@@ -259,6 +260,64 @@ function evidenceEngineMarkdown(evidenceEngine: EvidenceCoverage | null | undefi
     .join('\n');
 }
 
+function markdownList(items: string[]) {
+  return items.length > 0 ? items.map((item) => `- ${mdCell(item)}`).join('\n') : '- Not surfaced';
+}
+
+function researchWorkspaceMarkdown(workspace: ResearchWorkspace | null | undefined) {
+  if (!workspace) {
+    return [
+      '## Research Workspace',
+      '',
+      'Research workspace summary was not calculated for this export.',
+    ].join('\n');
+  }
+
+  const summary = workspace.executiveSummary;
+
+  return [
+    '## Research Workspace',
+    '',
+    '### Executive Summary',
+    '',
+    '**Strengths**',
+    markdownList(summary.strengths),
+    '',
+    '**Weaknesses**',
+    markdownList(summary.weaknesses),
+    '',
+    '**Key Metrics**',
+    markdownList(summary.keyMetrics),
+    '',
+    '**Credit Drivers**',
+    markdownList(summary.creditDrivers),
+    '',
+    '**Risks**',
+    markdownList(summary.risks),
+    '',
+    `**Outlook:** ${mdCell(summary.outlook)}`,
+    '',
+    '**Evidence**',
+    markdownList(summary.evidence),
+    '',
+    '### Credit Factors',
+    '',
+    '| Factor | Status | Confidence | Evidence Count | Summary | Gaps |',
+    '|---|---|---|---|---|---|',
+    ...workspace.creditFactors.map((factor) =>
+      `| ${mdCell(factor.label)} | ${mdCell(factor.status)} | ${mdCell(factor.confidence)} | ${factor.evidenceCount} | ${mdCell(factor.summary)} | ${mdCell(factor.gaps.join('; ') || 'None')} |`
+    ),
+    '',
+    '### Key Risks',
+    '',
+    '| Risk | Level | Confidence | Evidence Count | Summary | Next Check |',
+    '|---|---|---|---|---|---|',
+    ...workspace.keyRisks.map((risk) =>
+      `| ${mdCell(risk.label)} | ${mdCell(risk.level)} | ${mdCell(risk.confidence)} | ${risk.evidenceCount} | ${mdCell(risk.summary)} | ${mdCell(risk.nextCheck)} |`
+    ),
+  ].join('\n');
+}
+
 function markdownFor(
   detail: any,
   generatedReport: any | null,
@@ -270,6 +329,7 @@ function markdownFor(
   const report = generatedReport?.content || detail.snippet || '';
   const evidencePackage = evidencePackageFor(detail);
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
+  const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
 
   return [
     `# ${title}`,
@@ -277,6 +337,8 @@ function markdownFor(
     `Generated: ${generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString()}`,
     '',
     exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate, evidenceEngine),
+    '',
+    researchWorkspaceMarkdown(researchWorkspace),
     '',
     evidenceEngineMarkdown(evidenceEngine),
     '',
@@ -311,6 +373,26 @@ function evidenceEngineFor(detail: any, generatedReport: any | null, evidencePac
     ...detail,
     evidencePackage,
   }, generatedReport?.content || detail?.snippet || '');
+}
+
+function researchWorkspaceFor(
+  detail: any,
+  generatedReport: any | null,
+  evidencePackage: any,
+  evidenceEngine: EvidenceCoverage
+): ResearchWorkspace {
+  const packaged = generatedReport?.researchWorkspace ||
+    detail?.researchWorkspace ||
+    evidencePackage?.research_workspace;
+
+  if (packaged?.executiveSummary && packaged?.creditFactors && packaged?.keyRisks && !generatedReport?.editedAt) {
+    return packaged as ResearchWorkspace;
+  }
+
+  return buildResearchWorkspace({
+    ...detail,
+    evidencePackage,
+  }, generatedReport?.content || detail?.snippet || '', evidenceEngine);
 }
 
 function templateLabel(value: string) {
@@ -578,6 +660,7 @@ export function DetailPanel({
   const input = workflowInput(detail, reportTemplate);
   const evidencePackage = evidencePackageFor(detail);
   const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
+  const researchWorkspace = researchWorkspaceFor(detail, generatedReport, evidencePackage, evidenceEngine);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
   const documentDiagnostics = documentDiagnosticsFor(detail, evidencePackage);
@@ -616,7 +699,7 @@ export function DetailPanel({
 
   function downloadEvidenceJson() {
     downloadBlob(
-      JSON.stringify({ ...evidencePackage, evidence_engine: evidenceEngine }, null, 2),
+      JSON.stringify({ ...evidencePackage, evidence_engine: evidenceEngine, research_workspace: researchWorkspace }, null, 2),
       `${slug(detail.title || 'issuer')}_${slug(detail.researchModeLabel || 'research')}_evidence_package_${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8'
     );
@@ -797,6 +880,116 @@ export function DetailPanel({
 
       {activeTab === 'discovery' && (
         <>
+          <section className="answer-section research-workspace-section">
+            <div className="section-heading">
+              <div>
+                <h3>Executive summary workspace</h3>
+                <p className="muted small">A source-aware analyst summary organized for credit review.</p>
+              </div>
+              <span className="status-pill ready">Phase 5</span>
+            </div>
+            <div className="workspace-summary-grid">
+              <article>
+                <span>Strengths</span>
+                {researchWorkspace.executiveSummary.strengths.slice(0, 4).map((item, index) => (
+                  <p key={`strength-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Weaknesses</span>
+                {researchWorkspace.executiveSummary.weaknesses.slice(0, 4).map((item, index) => (
+                  <p key={`weakness-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Key Metrics</span>
+                {researchWorkspace.executiveSummary.keyMetrics.slice(0, 5).map((item, index) => (
+                  <p key={`metric-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Credit Drivers</span>
+                {researchWorkspace.executiveSummary.creditDrivers.slice(0, 5).map((item, index) => (
+                  <p key={`driver-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Risks</span>
+                {researchWorkspace.executiveSummary.risks.slice(0, 5).map((item, index) => (
+                  <p key={`summary-risk-${index}`}>{item}</p>
+                ))}
+              </article>
+              <article>
+                <span>Evidence</span>
+                {researchWorkspace.executiveSummary.evidence.slice(0, 5).map((item, index) => (
+                  <p key={`summary-evidence-${index}`}>{item}</p>
+                ))}
+              </article>
+            </div>
+            <div className="workspace-outlook">
+              <span>Outlook</span>
+              <strong>{researchWorkspace.executiveSummary.outlook}</strong>
+            </div>
+          </section>
+
+          <section className="answer-section credit-factors-section">
+            <div className="section-heading">
+              <div>
+                <h3>Credit factors</h3>
+                <p className="muted small">Separate analytical sections for the main municipal credit profile.</p>
+              </div>
+              <span className="status-pill">
+                {researchWorkspace.creditFactors.filter((factor) => factor.status === 'Supported').length} supported
+              </span>
+            </div>
+            <div className="credit-factor-grid">
+              {researchWorkspace.creditFactors.map((factor) => (
+                <article key={factor.key} className={`credit-factor-card ${factor.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <div className="credit-factor-head">
+                    <h4>{factor.label}</h4>
+                    <span>{factor.status}</span>
+                  </div>
+                  <p>{factor.summary}</p>
+                  <div className="record-meta">
+                    <span>{factor.confidence} confidence</span>
+                    <span>{factor.evidenceCount} evidence items</span>
+                  </div>
+                  {factor.gaps.length > 0 && (
+                    <p className="factor-gap">Gap: {factor.gaps[0]}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="answer-section key-risks-section">
+            <div className="section-heading">
+              <div>
+                <h3>Key risks monitor</h3>
+                <p className="muted small">Automatic risk summaries for common public-finance monitoring themes.</p>
+              </div>
+              <span className="status-pill warning">
+                {researchWorkspace.keyRisks.filter((risk) => risk.level === 'Elevated' || risk.level === 'Watch').length} active/watch
+              </span>
+            </div>
+            <div className="risk-monitor-grid">
+              {researchWorkspace.keyRisks.map((risk) => (
+                <article key={risk.key} className={`risk-monitor-card ${risk.level.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <div className="risk-card-head">
+                    <h4>{risk.label}</h4>
+                    <span>{risk.level}</span>
+                  </div>
+                  <p>{risk.summary}</p>
+                  <div className="record-meta">
+                    <span>{risk.confidence} confidence</span>
+                    <span>{risk.evidenceCount} evidence items</span>
+                  </div>
+                  <p className="next-check">{risk.nextCheck}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
           <section className="answer-section evidence-command">
             <div className="section-heading">
               <div>

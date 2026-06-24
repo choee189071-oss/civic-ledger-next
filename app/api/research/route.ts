@@ -25,6 +25,7 @@ import {
   type RetrievalDiagnostics,
 } from '../../../lib/research-diagnostics';
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
+import { buildResearchWorkspace } from '../../../lib/research-workspace';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -1373,9 +1374,19 @@ export async function POST(request: Request) {
     coverageDashboard,
     evidencePackage,
   }, content);
+  const researchWorkspace = buildResearchWorkspace({
+    title: researchSubject,
+    facts,
+    citations,
+    searchResults,
+    documentInventory,
+    coverageDashboard,
+    evidencePackage,
+  }, content, evidenceEngine);
   const enrichedEvidencePackage = {
     ...evidencePackage,
     evidence_engine: evidenceEngine,
+    research_workspace: researchWorkspace,
   };
 
   return NextResponse.json({
@@ -1425,6 +1436,7 @@ export async function POST(request: Request) {
       evidencePackage: enrichedEvidencePackage,
       evidenceEngine,
       evidenceCoverageScore: evidenceEngine.coveragePercent,
+      researchWorkspace,
       documentDiagnostics,
       retrievalDiagnostics,
       failureClassification,

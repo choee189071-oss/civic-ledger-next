@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildEvidenceEngine } from '../../../lib/evidence-engine';
+import { buildResearchWorkspace } from '../../../lib/research-workspace';
 
 export const runtime = 'nodejs';
 
@@ -38,6 +39,7 @@ const REPORT_TEMPLATES = {
       'Preliminary Credit View',
       'Executive Summary',
       'Issuer Overview',
+      'Credit Factors',
       'Ratings and Recent Actions',
       'Credit Strengths',
       'Credit Risks',
@@ -226,10 +228,14 @@ const REPORT_TEMPLATES = {
     audience: 'senior leader who wants the shortest useful version',
     sections: [
       'One-Paragraph Bottom Line',
-      'Three Key Strengths',
-      'Three Key Risks',
+      'Strengths',
+      'Weaknesses',
+      'Key Metrics',
+      'Credit Drivers',
+      'Risks',
+      'Outlook',
+      'Evidence',
       'Evidence Coverage Score',
-      'Evidence Coverage Score Method',
       'Key Evidence Caveats',
       'Next Step',
     ],
@@ -512,6 +518,7 @@ function compactRecord(record: any, templateKey: ReportTemplate) {
     })),
     missingCoreFinanceDocs: record?.financeFocused && record?.coreFinanceDocumentsFound === false,
     searchQueries: record?.searchQueries ?? [],
+    researchWorkspace: record?.researchWorkspace ?? record?.evidencePackage?.research_workspace ?? null,
   };
 }
 
@@ -552,10 +559,16 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     : [];
   const executiveSummaryRules = templateKey === 'executive-summary'
     ? [
-      'For Executive Summary, replace shallow bulleting with a concise decision-ready structure: Bottom line, Three Key Strengths, Three Key Risks, Evidence Coverage Score, Evidence Coverage Score Method, Evidence Caveats, Next Step.',
-      'Evidence Coverage Score Method must explain which Tier 1 / Tier 2 sources were counted, which core documents are missing, and why the score is preliminary or review-ready.',
+      'For Executive Summary, use exactly these sections: One-Paragraph Bottom Line, Strengths, Weaknesses, Key Metrics, Credit Drivers, Risks, Outlook, Evidence, Evidence Coverage Score, Key Evidence Caveats, Next Step.',
+      'Strengths, Weaknesses, Key Metrics, Credit Drivers, Risks, Outlook, and Evidence should use the researchWorkspace object when supplied.',
+      'Evidence Coverage Score must explain which Tier 1 / Tier 2 sources were counted, which core documents are missing, and why the score is preliminary or review-ready.',
     ]
     : [];
+  const researchWorkspaceRules = [
+    'If researchWorkspace is supplied, use it as the organizing layer for the report. Preserve its Executive Summary, Credit Factors, and Key Risks classifications unless the source package clearly contradicts them.',
+    'For Credit Factors, separate Business Profile, Financial Profile, Debt Profile, Liquidity, Governance, Operating Performance, and Capital Program. Mark unsupported factors as Needs Evidence or Not Surfaced rather than inventing analysis.',
+    'For Key Risks, explicitly address Wildfire, Political, Pension, Cyber, Water Supply, Demand, Rate Pressure, and Climate when the template calls for risk monitoring or credit analysis. Use No Current Signal or Needs Evidence when no issuer-specific source supports the risk.',
+  ];
   const workflowReportRules = templateKey === 'watchlist-monitor'
     ? [
       'For Watchlist Monitor, include a table with issuer, latest development status, recency label, source tier, source URL, and next action.',
@@ -601,6 +614,7 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     ...ratingCommitteeRules,
     ...documentInventoryRules,
     ...executiveSummaryRules,
+    ...researchWorkspaceRules,
     ...workflowReportRules,
     `Audience: ${template.audience}.`,
     `Required report sections, in this order: ${template.sections.join(' | ')}.`,
@@ -699,6 +713,7 @@ export async function POST(request: Request) {
 
   const content = responseText(payload);
   const evidenceEngine = buildEvidenceEngine(record, content || '');
+  const researchWorkspace = buildResearchWorkspace(record, content || '', evidenceEngine);
 
   return NextResponse.json({
     report: {
@@ -715,6 +730,7 @@ export async function POST(request: Request) {
       sectionTitle: sectionTitle || null,
       evidenceEngine,
       evidenceCoverageScore: evidenceEngine.coveragePercent,
+      researchWorkspace,
     },
   });
 }

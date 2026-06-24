@@ -24,6 +24,7 @@ export type GeneratedReport = {
   editedAt?: string;
   evidenceEngine?: Record<string, unknown>;
   evidenceCoverageScore?: number;
+  researchWorkspace?: Record<string, unknown>;
 };
 
 export type ReportVersion = {
@@ -103,6 +104,7 @@ export type ResearchRecord = {
   evidencePackage?: Record<string, unknown>;
   evidenceEngine?: Record<string, unknown>;
   evidenceCoverageScore?: number;
+  researchWorkspace?: Record<string, unknown>;
   documentDiagnostics?: Record<string, unknown>;
   retrievalDiagnostics?: Record<string, unknown>;
   failureClassification?: Record<string, unknown>;
