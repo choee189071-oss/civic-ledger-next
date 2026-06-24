@@ -1675,31 +1675,39 @@ export function DetailPanel({
             <div className="financial-trend-grid">
               {issuerDashboard.financialTrends.map((metric) => {
                 const values = metric.dataPoints.map((point) => point.value);
+                const hasTrendData = values.some((value) => value !== null);
                 return (
                   <article key={metric.key} className={`trend-card ${metric.trend.toLowerCase().replace(/\s+/g, '-')}`}>
                     <div className="trend-card-head">
-                      <div>
+                      <div className="trend-title-stack">
                         <span>{metric.label}</span>
                         <strong>{metric.currentValue}</strong>
                       </div>
                       <em>{metric.trend}</em>
                     </div>
-                    <div className="trend-bars">
-                      {metric.dataPoints.map((point, index) => (
-                        <div key={`${metric.key}-${point.year}-${index}`} className="trend-bar-row">
-                          <span>{point.year}</span>
-                          <div className="trend-bar-track">
-                            <i style={{ width: pointWidth(point.value, values) }} />
+                    {hasTrendData ? (
+                      <div className="trend-bars">
+                        {metric.dataPoints.map((point, index) => (
+                          <div key={`${metric.key}-${point.year}-${index}`} className="trend-bar-row">
+                            <span>{point.year}</span>
+                            <div className="trend-bar-track">
+                              <i style={{ width: pointWidth(point.value, values) }} />
+                            </div>
+                            <strong>{point.value !== null ? point.label.slice(0, 28) : 'Needs source'}</strong>
                           </div>
-                          <strong>{point.value !== null ? point.label.slice(0, 28) : 'Needs source'}</strong>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="record-meta">
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="trend-empty-state">
+                        <span>Metric not sourced</span>
+                        <strong>Attach ACFR, OS/POS, budget, or continuing disclosure evidence.</strong>
+                      </div>
+                    )}
+                    <div className="record-meta trend-card-meta">
                       <span>{metric.confidence} confidence</span>
                       <span>{metric.evidence.length} evidence items</span>
                     </div>
-                    <p className="next-check">{metric.nextCheck}</p>
+                    <p className="next-check trend-next-check"><span>Next check</span>{metric.nextCheck}</p>
                   </article>
                 );
               })}

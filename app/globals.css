@@ -885,7 +885,8 @@ h3 {
 .theme-dark .loading-card,
 .theme-dark .empty-card,
 .theme-dark .universal-search-panel,
-.theme-dark .structured-answer-section {
+.theme-dark .structured-answer-section,
+.theme-dark .trend-empty-state {
   background: #102035;
   border-color: var(--color-border);
 }
@@ -1845,7 +1846,7 @@ h3 {
 
 .financial-trend-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1856,16 +1857,22 @@ h3 {
   border: 1px solid var(--color-divider);
   border-radius: var(--radius);
   display: grid;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  padding: 12px;
+  padding: 14px;
 }
 
 .trend-card-head {
   align-items: flex-start;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: space-between;
+}
+
+.trend-title-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .trend-card-head span,
@@ -1881,8 +1888,9 @@ h3 {
 .debt-metric-card strong,
 .market-metric-card strong {
   color: var(--color-text);
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 18px;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
 }
 
 .trend-card-head em {
@@ -1893,7 +1901,7 @@ h3 {
   font-size: 11px;
   font-style: normal;
   font-weight: 850;
-  padding: 5px 8px;
+  padding: 6px 9px;
 }
 
 .trend-card.needs-source .trend-card-head em,
@@ -1905,6 +1913,29 @@ h3 {
 .trend-bars {
   display: grid;
   gap: 7px;
+}
+
+.trend-empty-state {
+  background: #f7fbff;
+  border: 1px solid var(--color-divider);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+}
+
+.trend-empty-state span {
+  color: var(--color-faint);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.trend-empty-state strong {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.35;
 }
 
 .trend-bar-row {
@@ -1941,6 +1972,28 @@ h3 {
   border-radius: inherit;
   display: block;
   height: 100%;
+}
+
+.trend-card-meta {
+  gap: 7px;
+}
+
+.trend-next-check {
+  background: transparent;
+  border-top: 1px solid var(--color-divider);
+  border-radius: 0;
+  display: grid;
+  gap: 4px;
+  line-height: 1.4;
+  padding: 10px 0 0;
+}
+
+.trend-next-check span {
+  color: var(--color-faint);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .rating-timeline {
