@@ -107,6 +107,20 @@ function sourceValue(item: any, keys: string[]) {
   return 'Not found';
 }
 
+function sourceQualitySummary(source: any, sourceStatuses: Record<string, string>) {
+  const tier = sourceValue(source, ['sourceTier', 'source_tier']);
+  const recency = sourceValue(source, ['recencyWindow', 'recency_window']);
+  const verification = sourceStatuses[sourceKey(source)] ?? sourceValue(source, ['status', 'verification_status']);
+  const confidence = sourceValue(source, ['confidenceTier', 'confidence_tier', 'confidence']);
+
+  return [
+    tier !== 'Not found' ? `Tier: ${tier}` : null,
+    recency !== 'Not found' ? `Recency: ${recency}` : null,
+    verification !== 'Not found' ? `Use: ${verification}` : null,
+    confidence !== 'Not found' ? `Confidence: ${confidence}` : null,
+  ].filter(Boolean).join('; ') || 'Not classified';
+}
+
 function structuredSourceAppendixMarkdown(detail: any, evidencePackage: any, sourceStatuses: Record<string, string>) {
   const sources = allSourceCandidates(detail, evidencePackage).slice(0, 25);
 
@@ -119,30 +133,68 @@ function structuredSourceAppendixMarkdown(detail: any, evidencePackage: any, sou
   }
 
   const rows = sources.map((source) => [
-    sourceValue(source, ['documentType', 'document_type', 'type']),
     sourceValue(source, ['title', 'document', 'document_title']),
+    sourceValue(source, ['documentType', 'document_type', 'type']),
     sourceValue(source, ['publicationDate', 'publication_date', 'date']),
-    sourceValue(source, ['datedDate', 'dated_date']),
-    sourceValue(source, ['closingDate', 'closing_date']),
-    sourceValue(source, ['filingEntity', 'filing_entity', 'source']),
-    sourceValue(source, ['cusip']),
-    sourceValue(source, ['emmaSubmissionId', 'emma_submission_id']),
-    sourceValue(source, ['sourceTier', 'source_tier']),
-    sourceValue(source, ['confidenceTier', 'confidence']),
-    sourceStatuses[sourceKey(source)] ?? sourceValue(source, ['status', 'verification_status']),
+    sourceQualitySummary(source, sourceStatuses),
     sourceValue(source, ['url', 'source_url']),
   ]);
 
   return [
     '## Structured Source Appendix',
     '',
-    '| Document Type | Document Title | Publication / Filing Date | Dated Date | Closing Date | Filing Entity | CUSIP | EMMA Submission ID | Source Tier | Confidence | Verification Status | URL |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| Document Title | Type | Date | Evidence Quality | URL |',
+    '|---|---|---|---|---|',
     ...rows.map((row) => `| ${row.map(mdCell).join(' | ')} |`),
   ].join('\n');
 }
 
-function markdownFor(detail: any, generatedReport: any | null, sourceStatuses: Record<string, string>) {
+function exportDashboardMarkdown(
+  detail: any,
+  generatedReport: any | null,
+  evidencePackage: any,
+  sourceStatuses: Record<string, string>,
+  runStatus: string,
+  reportTemplate: string
+) {
+  const sources = allSourceCandidates(detail, evidencePackage);
+  const coverageRows = evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? [];
+  const missingCoverage = coverageRows.filter((item: any) =>
+    /missing|not found|manual|insufficient/i.test(`${item?.status ?? ''} ${item?.notes ?? ''}`)
+  ).length;
+  const tier1Count = sources.filter((source) => /tier\s*1|high/i.test(`${source.sourceTier ?? source.source_tier ?? ''}`)).length;
+  const freshCount = sources.filter((source) => /3.?month|preferred/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
+  const fallbackCount = sources.filter((source) => /6.?month|fallback/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
+  const manualCount = sources.filter((source) =>
+    /manual|candidate|verify|unverified|missing|rejected/i.test(
+      `${sourceStatuses[sourceKey(source)] ?? ''} ${source.status ?? ''} ${source.notes ?? ''}`
+    )
+  ).length;
+
+  return [
+    '## Review Dashboard',
+    '',
+    '| Field | Value |',
+    '|---|---|',
+    `| Run status | ${mdCell(runStatus || 'Draft')} |`,
+    `| Output type | ${mdCell(templateLabel(reportTemplate))} |`,
+    `| Research mode | ${mdCell(detail.researchModeLabel ?? detail.topic ?? 'Not found')} |`,
+    `| Evidence coverage | ${mdCell(detail.evidenceQualitySummary ?? `${coverageRows.length || 'No'} coverage areas tracked; ${missingCoverage} missing/manual items flagged`)} |`,
+    `| Tier 1 / primary sources | ${tier1Count} candidate records |`,
+    `| Fresh 3-month evidence | ${freshCount} candidate records |`,
+    `| 6-month fallback evidence | ${fallbackCount} candidate records |`,
+    `| Manual verification / gaps | ${manualCount + missingCoverage} items |`,
+    `| Generated at | ${mdCell(generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString())} |`,
+  ].join('\n');
+}
+
+function markdownFor(
+  detail: any,
+  generatedReport: any | null,
+  sourceStatuses: Record<string, string>,
+  runStatus: string,
+  reportTemplate: string
+) {
   const title = generatedReport?.title || detail.title || 'Research Report';
   const report = generatedReport?.content || detail.snippet || '';
   const evidencePackage = evidencePackageFor(detail);
@@ -151,6 +203,8 @@ function markdownFor(detail: any, generatedReport: any | null, sourceStatuses: R
     `# ${title}`,
     '',
     `Generated: ${generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString()}`,
+    '',
+    exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate),
     '',
     report,
     '',
@@ -376,7 +430,11 @@ export function DetailPanel({
   ].join('_');
 
   function downloadMarkdown() {
-    downloadBlob(markdownFor(detail, generatedReport, sourceStatuses), `${filenameBase}.md`, 'text/markdown;charset=utf-8');
+    downloadBlob(
+      markdownFor(detail, generatedReport, sourceStatuses, runStatus, reportTemplate),
+      `${filenameBase}.md`,
+      'text/markdown;charset=utf-8'
+    );
   }
 
   function downloadEvidenceJson() {
@@ -393,7 +451,7 @@ export function DetailPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: generatedReport?.title || detail.title,
-        content: markdownFor(detail, generatedReport, sourceStatuses),
+        content: markdownFor(detail, generatedReport, sourceStatuses, runStatus, reportTemplate),
         filename: `${filenameBase}.docx`,
       }),
     });
@@ -415,7 +473,7 @@ export function DetailPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: generatedReport?.title || detail.title,
-        content: markdownFor(detail, generatedReport, sourceStatuses),
+        content: markdownFor(detail, generatedReport, sourceStatuses, runStatus, reportTemplate),
         filename: `${filenameBase}.pdf`,
       }),
     });
@@ -432,7 +490,7 @@ export function DetailPanel({
   }
 
   async function copyReport() {
-    await navigator.clipboard.writeText(markdownFor(detail, generatedReport, sourceStatuses));
+    await navigator.clipboard.writeText(markdownFor(detail, generatedReport, sourceStatuses, runStatus, reportTemplate));
     setCopyStatus('Copied');
     window.setTimeout(() => setCopyStatus(''), 1600);
   }

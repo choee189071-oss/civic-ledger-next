@@ -309,7 +309,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
   }
 
   function ccdReportMarkdown(options?: { completedOnly?: boolean }) {
-    const date = new Date().toISOString();
+    const date = new Date().toISOString().slice(0, 10);
     const issuersToScan = selectedIssuers.length > 0 ? selectedIssuers : ccdIssuers;
     const foundCount = ccdUpdates.filter((item) => /Status:\s*Development found/i.test(item.update)).length;
     const noRecentCount = ccdUpdates.filter((item) => /Status:\s*No recent change found/i.test(item.update)).length;
@@ -326,6 +326,13 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     const body = bodyItems.length > 0
       ? bodyItems.join('\n\n---\n\n')
       : 'No issuer updates generated yet.';
+    const notScannedCount = Math.max(issuersToScan.length - ccdUpdates.length, 0);
+    const conditionRows = selectedConditionPrompts.length > 0
+      ? selectedConditionPrompts.map((condition) => {
+        const [label, ...rest] = condition.split(':');
+        return [label.trim(), rest.join(':').trim() || 'Selected monitoring condition'];
+      })
+      : [['All standard conditions', 'Board packets, bond actions, advisors/counsel, RFPs, EMMA/rating activity, budget/enrollment/funding signals']];
 
     return [
       '# General CCD Update',
@@ -333,23 +340,30 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
       `Generated: ${date}`,
       `Coverage: ${ccdUpdates.length} of ${issuersToScan.length} selected California CCD issuers${options?.completedOnly ? ' (completed items only)' : ''}`,
       '',
-      '## Executive Summary',
+      '## Monitoring Dashboard',
       '',
-      scope ? `- Preferred recency window: ${scope.preferredStartDate} to ${scope.asOfDate}.` : '- Preferred recency window: last 3 months; fallback: last 6 months.',
-      scope ? `- Fallback recency window: ${scope.fallbackStartDate} to ${scope.asOfDate}.` : '- Older items should be treated as background unless clearly material and still relevant.',
-      `- ${foundCount} issuers had a potentially material recent development surfaced by the scan.`,
-      `- ${noRecentCount} issuers had no recent change found in the preferred/fallback windows based on returned sources.`,
-      `- ${staleCount} issuers only surfaced older context outside the fallback window.`,
-      `- ${insufficientCount} issuers had insufficient public evidence from the search results.`,
-      `- ${verificationCount} issuers require manual verification before the item should be treated as issuer-specific or current.`,
-      `- ${Math.max(issuersToScan.length - ccdUpdates.length, 0)} selected issuers have not been scanned in this run.`,
-      '- This is a monitoring scan, not a credit opinion. Each issuer is checked separately and summarized for follow-up review.',
+      '| Metric | Result |',
+      '|---|---|',
+      `| Preferred recency window | ${scope ? `${scope.preferredStartDate} to ${scope.asOfDate}` : 'Last 3 months'} |`,
+      `| Fallback recency window | ${scope ? `${scope.fallbackStartDate} to ${scope.asOfDate}` : 'Last 6 months'} |`,
+      `| Selected issuers | ${issuersToScan.length} |`,
+      `| Scanned issuers | ${ccdUpdates.length} |`,
+      `| Material developments surfaced | ${foundCount} |`,
+      `| No recent change found | ${noRecentCount} |`,
+      `| Older context only | ${staleCount} |`,
+      `| Insufficient public evidence | ${insufficientCount} |`,
+      `| Needs manual verification | ${verificationCount} |`,
+      `| Not scanned | ${notScannedCount} |`,
+      '',
+      '## Use Caveat',
+      '',
+      'This is a monitoring scan, not a credit opinion. Each issuer is checked separately and summarized for follow-up review. Older material is background unless clearly material and still relevant.',
       '',
       '## Monitoring Conditions',
       '',
-      ...(selectedConditionPrompts.length > 0
-        ? selectedConditionPrompts.map((condition) => `- ${condition}`)
-        : ['- All standard conditions']),
+      '| Condition | Search focus |',
+      '|---|---|',
+      ...conditionRows.map((row) => `| ${row.map((cell) => cell.replace(/\|/g, '/')).join(' | ')} |`),
       '',
       '## Issuer Updates',
       '',

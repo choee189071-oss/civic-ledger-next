@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cleanExportInline, normalizeExportText, normalizePdfText } from '@/lib/export-formatting';
 
 export const runtime = 'nodejs';
 
@@ -6,10 +7,12 @@ type MarkdownBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'bullet'; text: string; ordered?: boolean }
+  | { type: 'table'; rows: string[][] }
   | { type: 'rule' };
 
 type PageElement =
   | { type: 'text'; text: string; x: number; y: number; size: number; font: 'regular' | 'bold' | 'italic' }
+  | { type: 'rect'; x: number; y: number; width: number; height: number; fill?: string; stroke?: string }
   | { type: 'line'; x1: number; y1: number; x2: number; y2: number };
 
 type FontStyle = Extract<PageElement, { type: 'text' }>['font'];
@@ -21,23 +24,12 @@ const TOP_Y = 714;
 const BOTTOM_Y = 58;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2;
 
-function ascii(value: string) {
-  return value
-    .replace(/[•–—]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '?');
-}
-
 function escapePdfText(value: string) {
-  return ascii(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  return normalizePdfText(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
 function stripMarkdownInline(value: string) {
-  return ascii(value)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1 ($2)')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
+  return cleanExportInline(value)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -95,7 +87,7 @@ function parseTableLines(lines: string[]) {
 
 function parseMarkdown(content: string, title: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
-  const lines = ascii(content).replace(/\r\n/g, '\n').split('\n');
+  const lines = normalizeExportText(content).replace(/\r\n/g, '\n').split('\n');
   let paragraph: string[] = [];
   let tableLines: string[] = [];
 
@@ -110,15 +102,8 @@ function parseMarkdown(content: string, title: string): MarkdownBlock[] {
     if (tableLines.length === 0) return;
 
     const rows = parseTableLines(tableLines);
-    const [headers, ...body] = rows;
-
-    if (headers?.length) {
-      body.forEach((row) => {
-        const text = row
-          .map((cell, index) => `${headers[index] || `Column ${index + 1}`}: ${cell || 'Not found'}`)
-          .join('; ');
-        blocks.push({ type: 'bullet', text });
-      });
+    if (rows.length > 0) {
+      blocks.push({ type: 'table', rows });
     }
 
     tableLines = [];
@@ -230,6 +215,84 @@ function layoutDocument(title: string, content: string) {
     y -= 14;
   }
 
+  function tableColumnWidths(columnCount: number) {
+    if (columnCount <= 1) return [CONTENT_WIDTH];
+    if (columnCount === 2) return [CONTENT_WIDTH * 0.34, CONTENT_WIDTH * 0.66];
+    if (columnCount === 3) return [CONTENT_WIDTH * 0.26, CONTENT_WIDTH * 0.24, CONTENT_WIDTH * 0.5];
+    if (columnCount === 4) return [CONTENT_WIDTH * 0.25, CONTENT_WIDTH * 0.19, CONTENT_WIDTH * 0.19, CONTENT_WIDTH * 0.37];
+    if (columnCount === 5) {
+      return [
+        CONTENT_WIDTH * 0.28,
+        CONTENT_WIDTH * 0.16,
+        CONTENT_WIDTH * 0.14,
+        CONTENT_WIDTH * 0.24,
+        CONTENT_WIDTH * 0.18,
+      ];
+    }
+
+    const base = CONTENT_WIDTH / columnCount;
+    return Array.from({ length: columnCount }, () => base);
+  }
+
+  function addTable(rows: string[][]) {
+    if (rows.length === 0) return;
+
+    const columnCount = Math.max(...rows.map((row) => row.length));
+    const widths = tableColumnWidths(columnCount);
+    const tableFontSize = columnCount >= 5 ? 7.8 : columnCount >= 4 ? 8.4 : 9.1;
+    const tableLeading = tableFontSize * 1.3;
+    const paddingX = 5;
+    const paddingY = 7;
+
+    y -= 4;
+
+    rows.forEach((row, rowIndex) => {
+      const normalizedRow = Array.from({ length: columnCount }, (_, index) => row[index] ?? '');
+      const wrappedCells = normalizedRow.map((cell, index) =>
+        wrapText(cell, Math.max(28, widths[index] - paddingX * 2), tableFontSize)
+      );
+      const maxLines = Math.max(...wrappedCells.map((lines) => lines.length), 1);
+      const rowHeight = Math.max(24, maxLines * tableLeading + paddingY * 2);
+
+      ensureSpace(rowHeight + 8);
+
+      const rowTop = y;
+      let x = MARGIN_X;
+      const isHeader = rowIndex === 0;
+
+      normalizedRow.forEach((_, columnIndex) => {
+        const width = widths[columnIndex];
+        currentPage().push({
+          type: 'rect',
+          x,
+          y: rowTop - rowHeight,
+          width,
+          height: rowHeight,
+          fill: isHeader ? '0.94 0.97 1.00' : undefined,
+          stroke: '0.82 0.86 0.91',
+        });
+
+        const lines = wrappedCells[columnIndex];
+        lines.forEach((line, lineIndex) => {
+          currentPage().push({
+            type: 'text',
+            text: line,
+            x: x + paddingX,
+            y: rowTop - paddingY - tableFontSize - lineIndex * tableLeading,
+            size: tableFontSize,
+            font: isHeader ? 'bold' : 'regular',
+          });
+        });
+
+        x += width;
+      });
+
+      y -= rowHeight;
+    });
+
+    y -= 12;
+  }
+
   addText(title || 'Research Report', { size: 22, font: 'bold', leading: 28 });
   addText(`Generated ${new Date().toISOString().slice(0, 10)}`, { size: 9.5, font: 'italic', leading: 15 });
   addRule();
@@ -261,6 +324,11 @@ function layoutDocument(title: string, content: string) {
         width: CONTENT_WIDTH - bulletWidth,
       });
       y -= 2;
+      continue;
+    }
+
+    if (block.type === 'table') {
+      addTable(block.rows);
       continue;
     }
 
@@ -312,6 +380,14 @@ function buildPdf(title: string, content: string) {
       ...pageElements.map((element) => {
         if (element.type === 'line') {
           return `0.82 0.86 0.91 RG 0.7 w ${element.x1} ${element.y1} m ${element.x2} ${element.y2} l S`;
+        }
+
+        if (element.type === 'rect') {
+          const fill = element.fill
+            ? `${element.fill} rg ${element.x} ${element.y} ${element.width} ${element.height} re f`
+            : '';
+          const stroke = `${element.stroke ?? '0.82 0.86 0.91'} RG 0.45 w ${element.x} ${element.y} ${element.width} ${element.height} re S`;
+          return [fill, stroke].filter(Boolean).join('\n');
         }
 
         return [

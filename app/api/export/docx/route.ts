@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cleanExportInline, normalizeExportText } from '@/lib/export-formatting';
 
 export const runtime = 'nodejs';
 
@@ -10,11 +11,7 @@ type Block =
   | { type: 'rule' };
 
 function normalizeText(value: string) {
-  return value
-    .replace(/[•–—]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/\r\n/g, '\n');
+  return normalizeExportText(value);
 }
 
 function escapeXml(value: string) {
@@ -26,10 +23,7 @@ function escapeXml(value: string) {
 }
 
 function cleanInline(value: string) {
-  return normalizeText(value)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1 ($2)')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
+  return cleanExportInline(value)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -149,14 +143,17 @@ function bulletXml(text: string) {
   ].join('');
 }
 
-function tableCellXml(text: string, header = false) {
+function tableCellXml(text: string, width: number, header = false) {
   const runStyle = header
     ? '<w:rPr><w:b/><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="20"/><w:color w:val="344054"/></w:rPr>'
-    : '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="20"/></w:rPr>';
+    : '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="19"/></w:rPr>';
 
   return [
     '<w:tc>',
-    '<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>',
+    `<w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>`,
+    '<w:tcMar><w:top w:w="120" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>',
+    header ? '<w:shd w:fill="EEF6FF"/>' : '',
+    '</w:tcPr>',
     '<w:p>',
     '<w:r>',
     runStyle,
@@ -167,17 +164,34 @@ function tableCellXml(text: string, header = false) {
   ].join('');
 }
 
+function tableColumnWidths(columnCount: number) {
+  const usableWidth = 9360;
+
+  if (columnCount <= 1) return [usableWidth];
+  if (columnCount === 2) return [3200, usableWidth - 3200];
+  if (columnCount === 3) return [2500, 2100, usableWidth - 4600];
+  if (columnCount === 4) return [2300, 1700, 1700, usableWidth - 5700];
+  if (columnCount === 5) return [2700, 1350, 1250, 2400, usableWidth - 7700];
+
+  const width = Math.floor(usableWidth / columnCount);
+  return Array.from({ length: columnCount }, () => width);
+}
+
 function tableXml(rows: string[][]) {
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  const widths = tableColumnWidths(columnCount);
   const body = rows.map((row, rowIndex) => [
     '<w:tr>',
-    ...row.map((cell) => tableCellXml(cell, rowIndex === 0)),
+    ...Array.from({ length: columnCount }, (_, index) => tableCellXml(row[index] ?? '', widths[index], rowIndex === 0)),
     '</w:tr>',
   ].join('')).join('');
 
   return [
     '<w:tbl>',
     '<w:tblPr>',
-    '<w:tblW w:w="0" w:type="auto"/>',
+    '<w:tblW w:w="9360" w:type="dxa"/>',
+    '<w:tblLayout w:type="fixed"/>',
+    '<w:tblCellMar><w:top w:w="120" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tblCellMar>',
     '<w:tblBorders>',
     '<w:top w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
     '<w:left w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
@@ -187,6 +201,9 @@ function tableXml(rows: string[][]) {
     '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="D0D7E2"/>',
     '</w:tblBorders>',
     '</w:tblPr>',
+    '<w:tblGrid>',
+    ...widths.map((width) => `<w:gridCol w:w="${width}"/>`),
+    '</w:tblGrid>',
     body,
     '</w:tbl>',
   ].join('');
