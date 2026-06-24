@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { parseUniversalSearchQuery } from '../../lib/universal-search';
 
 type Result = {
   id: string;
+  kind?: string;
   title: string;
   topic: string;
   source: string;
   score?: number;
   summary: string;
+  snippet?: string;
   facts?: string[];
   citations?: string[];
+  fiscalYear?: string;
+  generatedAt?: string;
+  savedAt?: string;
+  documentInventory?: Array<Record<string, any>>;
+  coverageDashboard?: Array<Record<string, any>>;
+  searchResults?: Array<Record<string, any>>;
+  evidencePackage?: Record<string, any>;
+  workflowInput?: Record<string, any>;
+  universalSearch?: Record<string, any>;
 };
 
 type Props = {
@@ -34,7 +45,15 @@ type Props = {
   onTopic: (v: string) => void;
   onSource: (v: string) => void;
   onSort: (v: string) => void;
-  onSearch: () => void;
+  onSearch: (overrides?: {
+    query?: string;
+    promptMode?: string;
+    customAngle?: string;
+    outputType?: string;
+    topic?: string;
+    source?: string;
+    sort?: string;
+  }) => void;
   onSelect: (id: string) => void;
   onTab: (v: string) => void;
   isResearching: boolean;
@@ -125,6 +144,140 @@ const searchExamples = [
   'Issuer exposed to wildfire',
 ];
 
+function displayValue(value: any, fallback = 'Not found') {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim();
+  if (!text || /^null$|^undefined$|^n\/a$/i.test(text)) return fallback;
+  return text;
+}
+
+function factValue(facts: string[] | undefined, pattern: RegExp) {
+  const match = facts?.find((fact) => pattern.test(fact));
+  if (!match) return '';
+  return match.replace(/^[^:]+:\s*/, '').trim();
+}
+
+function maxFiscalYear(text: string) {
+  const years = [...text.matchAll(/\b(?:FY\s*)?(20\d{2})\b/gi)]
+    .map((match) => Number(match[1]))
+    .filter((year) => year >= 2020 && year <= new Date().getFullYear() + 1);
+
+  return years.length > 0 ? `FY ${Math.max(...years)}` : '';
+}
+
+function formatCardDate(value: any) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return String(value);
+  return date.toLocaleDateString();
+}
+
+function sourceDate(source: Record<string, any>) {
+  return displayValue(
+    source.publicationDate ||
+    source.publication_date ||
+    source.date ||
+    source.last_updated ||
+    source.emmaFilingDate ||
+    source.emma_filing_date,
+    ''
+  );
+}
+
+function sourceTitle(source: Record<string, any>) {
+  return displayValue(source.title || source.document || source.document_title || source.url, 'Source candidate');
+}
+
+function sourceType(source: Record<string, any>) {
+  return displayValue(source.documentType || source.document_type || source.type || source.source, '');
+}
+
+function normalizeCoverageRows(item: Result) {
+  const coverage = item.evidencePackage?.coverage_dashboard ?? item.coverageDashboard ?? [];
+
+  if (Array.isArray(coverage)) {
+    return coverage;
+  }
+
+  if (coverage && typeof coverage === 'object') {
+    return Object.entries(coverage).map(([key, value]: [string, any]) => ({
+      area: key.replace(/_/g, ' '),
+      status: value?.status,
+      confidence: value?.confidence,
+    }));
+  }
+
+  return [];
+}
+
+function isCoverageFound(row: Record<string, any>) {
+  return /found|available|complete|verified|used/i.test(`${row.status ?? ''} ${row.confidence ?? ''}`);
+}
+
+function coveragePercent(item: Result) {
+  const rows = normalizeCoverageRows(item);
+  if (rows.length === 0) return '0%';
+  const found = rows.filter(isCoverageFound).length;
+  return `${Math.round((found / rows.length) * 100)}%`;
+}
+
+function allDocumentSources(item: Result) {
+  const packageInventory = Array.isArray(item.evidencePackage?.document_inventory)
+    ? item.evidencePackage?.document_inventory
+    : [];
+
+  return [
+    ...packageInventory,
+    ...(item.documentInventory ?? []),
+    ...(item.searchResults ?? []),
+  ].filter(Boolean);
+}
+
+function latestDocument(item: Result, pattern?: RegExp) {
+  const sources = allDocumentSources(item)
+    .filter((source) => !pattern || pattern.test(`${sourceTitle(source)} ${sourceType(source)} ${source.url ?? ''}`))
+    .map((source) => ({
+      source,
+      time: Date.parse(sourceDate(source)),
+    }))
+    .sort((a, b) => (Number.isNaN(b.time) ? 0 : b.time) - (Number.isNaN(a.time) ? 0 : a.time));
+
+  return sources[0]?.source;
+}
+
+function firstRegexValue(text: string, pattern: RegExp) {
+  return text.match(pattern)?.[1]?.trim() ?? '';
+}
+
+function issuerSnapshotFor(item: Result) {
+  const factsText = (item.facts ?? []).join(' ');
+  const bodyText = [item.summary, item.snippet, factsText, item.title].join(' ');
+  const universalIssuer = item.universalSearch?.primaryIssuer?.canonicalName;
+  const universalRating = item.universalSearch?.facets?.find((facet: any) => facet.type === 'rating')?.value;
+  const latestFiling = latestDocument(item, /filing|disclosure|official statement|rating|acfr|audit|emma|msrb/i) ?? latestDocument(item);
+  const latestRating = latestDocument(item, /rating|moody|s&p|fitch|kbra|kroll|outlook|upgrade|downgrade/i);
+  const ratingFromText = firstRegexValue(bodyText, /\b(Aaa|Aa[1-3]?|AAA|AA[+-]?|A[+-]|Baa[1-3]?|BBB[+-]?)\b/i);
+  const debtFromText = firstRegexValue(bodyText, /(?:outstanding debt|debt outstanding|total debt)[^$]{0,60}(\$[0-9,.]+\s*(?:million|billion|m|bn)?)/i);
+  const latestFinancialYear = item.fiscalYear || factValue(item.facts, /fiscal year/i) || maxFiscalYear(bodyText);
+  const filingDate = sourceDate(latestFiling ?? {});
+  const lastUpdated = item.generatedAt || item.savedAt || item.evidencePackage?.search_timestamp || filingDate;
+
+  return {
+    issuer: displayValue(item.workflowInput?.issuer || item.evidencePackage?.issuer || universalIssuer || item.title),
+    ratings: displayValue(factValue(item.facts, /^ratings?/i) || universalRating || ratingFromText),
+    outstandingDebt: displayValue(factValue(item.facts, /outstanding debt|total debt/i) || debtFromText),
+    latestFiling: latestFiling ? displayValue(filingDate || sourceTitle(latestFiling)) : 'Not found',
+    latestFilingTitle: latestFiling ? sourceTitle(latestFiling) : '',
+    latestFinancialYear: displayValue(latestFinancialYear),
+    coverage: coveragePercent(item),
+    recentRatingAction: displayValue(
+      factValue(item.facts, /recent rating action|rating action|outlook|upgrade|downgrade/i) ||
+      (latestRating ? sourceTitle(latestRating) : '')
+    ),
+    lastUpdated: displayValue(formatCardDate(lastUpdated)),
+  };
+}
+
 export function SearchPanel(props: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const universalSearch = parseUniversalSearchQuery(props.query);
@@ -158,9 +311,9 @@ export function SearchPanel(props: Props) {
         />
         <button
           className="icon-button primary"
-          onClick={props.onSearch}
           aria-label="Run research search"
           disabled={props.isResearching}
+          onClick={() => props.onSearch()}
         >
           {props.isResearching ? '…' : '⌕'}
         </button>
@@ -334,25 +487,107 @@ export function SearchPanel(props: Props) {
           {props.items.length === 0 && (
             <p className="muted">No results match the current query.</p>
           )}
-          {props.items.map((item) => (
-            <article
-              key={item.id}
-              className={`result ${props.selectedId === item.id ? 'active' : ''}`}
-              onClick={() => props.onSelect(item.id)}
-            >
-              <div className="result-topline">
-                <div>
-                  <div className="meta">
-                    <span>{item.topic}</span>
-                    <span>{item.source}</span>
+          {props.items.map((item) => {
+            const snapshot = issuerSnapshotFor(item);
+            const runQuickAction = (
+              event: MouseEvent<HTMLButtonElement>,
+              overrides: Parameters<Props['onSearch']>[0]
+            ) => {
+              event.stopPropagation();
+              if (overrides?.query) props.onQuery(overrides.query);
+              if (overrides?.promptMode) props.onPromptMode(overrides.promptMode);
+              if (overrides?.outputType) props.onReportTemplate(overrides.outputType);
+              if (overrides?.customAngle !== undefined) props.onCustomAngle(overrides.customAngle);
+              props.onSearch(overrides);
+            };
+
+            return (
+              <article
+                key={item.id}
+                className={`result issuer-result-card ${props.selectedId === item.id ? 'active' : ''}`}
+                onClick={() => props.onSelect(item.id)}
+              >
+                <div className="result-topline">
+                  <div>
+                    <div className="meta">
+                      <span>{item.topic}</span>
+                      <span>{item.source}</span>
+                    </div>
+                    <span className="issuer-field-label">Issuer</span>
+                    <h3>{snapshot.issuer}</h3>
                   </div>
-                  <h3>{item.title}</h3>
+                  <span className="coverage-badge">{snapshot.coverage}</span>
                 </div>
-                <span className="badge">{item.score ?? 'Live'}</span>
-              </div>
-              <p className="muted">{item.summary}</p>
-            </article>
-          ))}
+
+                <div className="issuer-snapshot-grid">
+                  <div>
+                    <span>Ratings</span>
+                    <strong>{snapshot.ratings}</strong>
+                  </div>
+                  <div>
+                    <span>Outstanding Debt</span>
+                    <strong>{snapshot.outstandingDebt}</strong>
+                  </div>
+                  <div>
+                    <span>Latest Filing</span>
+                    <strong>{snapshot.latestFiling}</strong>
+                    {snapshot.latestFilingTitle && <p>{snapshot.latestFilingTitle}</p>}
+                  </div>
+                  <div>
+                    <span>Latest Financial Year</span>
+                    <strong>{snapshot.latestFinancialYear}</strong>
+                  </div>
+                  <div>
+                    <span>Recent Rating Action</span>
+                    <strong>{snapshot.recentRatingAction}</strong>
+                  </div>
+                  <div>
+                    <span>Last Updated</span>
+                    <strong>{snapshot.lastUpdated}</strong>
+                  </div>
+                </div>
+
+                <p className="muted">{item.summary}</p>
+
+                <div className="result-quick-actions" aria-label={`Quick actions for ${snapshot.issuer}`}>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      props.onSelect(item.id);
+                    }}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={(event) => runQuickAction(event, {
+                      query: snapshot.issuer,
+                      promptMode: 'issuer-credit-profile',
+                      outputType: 'credit-memo',
+                      customAngle: '',
+                    })}
+                  >
+                    Credit Memo
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={(event) => runQuickAction(event, {
+                      query: snapshot.issuer,
+                      promptMode: 'risk-news-monitoring',
+                      outputType: 'risk-monitor',
+                      customAngle: 'Focus on recent rating actions, board items, filings, bond authorizations, RFPs, and material risk developments.',
+                    })}
+                  >
+                    Risk Monitor
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 

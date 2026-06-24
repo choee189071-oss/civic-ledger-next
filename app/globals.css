@@ -764,6 +764,11 @@ h3 {
   padding: 13px;
 }
 
+.issuer-result-card {
+  display: grid;
+  gap: 12px;
+}
+
 .result.active {
   border-color: #9dcced;
   box-shadow: 0 0 0 2px #e5f3fb;
@@ -777,6 +782,93 @@ h3 {
 .result p {
   font-size: 13px;
   margin-top: 8px;
+}
+
+.issuer-result-card .result-topline {
+  align-items: flex-start;
+}
+
+.issuer-field-label {
+  color: var(--color-faint);
+  display: block;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.issuer-result-card h3 {
+  color: var(--color-navy);
+  font-size: 16px;
+  line-height: 1.25;
+  margin-top: 3px;
+}
+
+.coverage-badge {
+  align-items: center;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-sky-border);
+  border-radius: 999px;
+  color: var(--color-primary-dark);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 820;
+  justify-content: center;
+  min-width: 52px;
+  padding: 6px 9px;
+}
+
+.issuer-snapshot-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.issuer-snapshot-grid > div {
+  background: #f8fbff;
+  border: 1px solid var(--color-divider);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  min-height: 66px;
+  padding: 9px;
+}
+
+.issuer-snapshot-grid span {
+  color: var(--color-faint);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.issuer-snapshot-grid strong {
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.issuer-snapshot-grid p {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.result-quick-actions {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.result-quick-actions .button-secondary {
+  font-size: 12px;
+  min-height: 32px;
+  padding: 0 8px;
 }
 
 .meta,
@@ -2536,6 +2628,8 @@ h3 {
 
   .profile-form-grid,
   .profile-summary-grid,
+  .issuer-snapshot-grid,
+  .result-quick-actions,
   .section-inline-fields {
     grid-template-columns: 1fr;
   }

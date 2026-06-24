@@ -121,6 +121,21 @@ function sourceQualitySummary(source: any, sourceStatuses: Record<string, string
   ].filter(Boolean).join('; ') || 'Not classified';
 }
 
+function normalizeCoverageRows(coverage: any) {
+  if (Array.isArray(coverage)) return coverage;
+
+  if (coverage && typeof coverage === 'object') {
+    return Object.entries(coverage).map(([key, value]: [string, any]) => ({
+      area: key.replace(/_/g, ' '),
+      status: value?.status,
+      confidence: value?.confidence,
+      notes: value?.notes,
+    }));
+  }
+
+  return [];
+}
+
 function structuredSourceAppendixMarkdown(detail: any, evidencePackage: any, sourceStatuses: Record<string, string>) {
   const sources = allSourceCandidates(detail, evidencePackage).slice(0, 25);
 
@@ -158,7 +173,7 @@ function exportDashboardMarkdown(
   reportTemplate: string
 ) {
   const sources = allSourceCandidates(detail, evidencePackage);
-  const coverageRows = evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? [];
+  const coverageRows = normalizeCoverageRows(evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? []);
   const missingCoverage = coverageRows.filter((item: any) =>
     /missing|not found|manual|insufficient/i.test(`${item?.status ?? ''} ${item?.notes ?? ''}`)
   ).length;
@@ -469,7 +484,7 @@ export function DetailPanel({
   const evidencePackage = evidencePackageFor(detail);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
-  const coverageRows = evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? [];
+  const coverageRows = normalizeCoverageRows(evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? []);
   const coverageFoundCount = coverageRows.filter(coverageStatusIsFound).length;
   const coverageTotal = coverageRows.length;
   const coveragePercent = coverageTotal > 0 ? Math.round((coverageFoundCount / coverageTotal) * 100) : 0;
