@@ -7,6 +7,11 @@ import {
   sourceRecencyLabel,
   type RecencyScope,
 } from '../../../lib/research-recency';
+import {
+  getPerplexityApiKey,
+  getPerplexityModel,
+  perplexityApiKeyErrorMessage,
+} from '../../../lib/server-env';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -1098,12 +1103,12 @@ function apiErrorMessage(payload: any, status: number) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.PUBFIN_API_KEY;
+  const apiKey = getPerplexityApiKey();
 
   if (!apiKey) {
     return NextResponse.json(
       {
-        error: 'PUBFIN_API_KEY is not configured. Add it in Vercel Project Settings > Environment Variables.',
+        error: perplexityApiKeyErrorMessage(),
       },
       { status: 500 }
     );
@@ -1126,7 +1131,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Query is required.' }, { status: 400 });
   }
 
-  const model = process.env.PUBFIN_MODEL || 'sonar-pro';
+  const model = getPerplexityModel();
   const searchQueries = buildSearchQueries(query, promptMode, customAngle, recencyScope, source);
   const structuredResults = workflowOptions.includeLiveSearch
     ? await structuredConnectorResults(query, source, recencyScope)

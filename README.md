@@ -31,6 +31,9 @@ Create `.env.local` for local development, or add these in Vercel Project Settin
 
 ```bash
 PUBFIN_API_KEY=your_perplexity_api_key
+# Optional aliases accepted by the server:
+PERPLEXITY_API_KEY=your_perplexity_api_key
+PPLX_API_KEY=your_perplexity_api_key
 PUBFIN_MODEL=sonar-pro
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
@@ -38,7 +41,7 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
-`PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results.
+`PUBFIN_API_KEY` is used for both Sonar answers and broader Perplexity Search API evidence results. `PERPLEXITY_API_KEY` and `PPLX_API_KEY` are accepted as aliases.
 `OPENAI_API_KEY` is used by the report writer to turn structured research packages into deliverable work products.
 Supabase variables are optional. If omitted, saved records stay in the browser's local research library.
 

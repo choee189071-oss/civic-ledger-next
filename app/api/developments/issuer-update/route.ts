@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { buildRecencyScope, noRecentInfoGuide, recencyPrompt } from '../../../../lib/research-recency';
+import {
+  getPerplexityApiKey,
+  getPerplexityModel,
+  perplexityApiKeyErrorMessage,
+} from '../../../../lib/server-env';
 
 export const runtime = 'nodejs';
 
@@ -17,12 +22,12 @@ function responseText(payload: any) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.PUBFIN_API_KEY;
+  const apiKey = getPerplexityApiKey();
 
   if (!apiKey) {
     return NextResponse.json(
       {
-        error: 'PUBFIN_API_KEY is not configured. Add it in Vercel Project Settings > Environment Variables.',
+        error: perplexityApiKeyErrorMessage(),
       },
       { status: 500 }
     );
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Issuer is required.' }, { status: 400 });
   }
 
-  const model = process.env.PUBFIN_MODEL || 'sonar-pro';
+  const model = getPerplexityModel();
   const timestamp = new Date().toISOString();
   const recencyScope = buildRecencyScope(new Date(timestamp));
 
