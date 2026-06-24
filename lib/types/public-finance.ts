@@ -54,15 +54,22 @@ export type IssuerProfile = {
   sector?: string;
   state?: string;
   rating?: string;
+  ratings?: string;
   outstandingDebt?: string;
   latestOS?: string;
   latestACFR?: string;
+  latestEmmaFiling?: string;
+  latestRatingReport?: string;
   latestBudget?: string;
   boardPage?: string;
   emmaLink?: string;
   advisorsCounsel?: string;
   knownAdvisors?: string;
   lastCheckedDate?: string;
+  profileStatus?: string;
+  evidenceCoverageScore?: number;
+  sourceTrail?: Array<Record<string, unknown>>;
+  updateHistory?: Array<Record<string, unknown>>;
   notes?: string;
 };
 

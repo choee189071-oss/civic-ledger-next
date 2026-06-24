@@ -12,6 +12,11 @@ import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
 import { WorkflowCenterPanel } from './components/WorkflowCenterPanel';
 import { DocumentIntakePanel } from './components/DocumentIntakePanel';
 import type { DocumentWorkflowPackage } from '../lib/public-finance-document-pipeline';
+import {
+  buildIssuerProfileFromRecord,
+  profileKey,
+  profilePromptContext,
+} from '../lib/issuer-profile-database';
 import type {
   GeneratedReport,
   IssuerProfile,
@@ -90,10 +95,6 @@ function replaceSection(content: string, sectionTitle: string, replacement: stri
     replacement.trim(),
     ...lines.slice(end),
   ].join('\n').trim();
-}
-
-function profileKey(value: string) {
-  return value.trim().toLowerCase();
 }
 
 export default function HomePage() {
@@ -197,6 +198,7 @@ export default function HomePage() {
     const runTopic = overrides?.topic ?? topic;
     const runSource = overrides?.source ?? source;
     const runSort = overrides?.sort ?? sort;
+    const existingProfile = issuerProfiles[profileKey(runQuery)];
 
     setIsResearching(true);
     setResearchError(null);
@@ -214,6 +216,8 @@ export default function HomePage() {
             customAngle: runCustomAngle,
             outputType: runOutputType,
             workflowOptions,
+            issuerProfile: existingProfile ?? null,
+            issuerProfileContext: profilePromptContext(existingProfile),
           }),
         }),
         fetch(`/api/search?${new URLSearchParams({ q: runQuery, topic: runTopic, source: runSource, sort: runSort }).toString()}`),
@@ -241,6 +245,14 @@ export default function HomePage() {
       setResults(nextResults);
       setSelectedId(researchRecord.id);
       setDetail(researchRecord);
+      setIssuerProfiles((profiles) => ({
+        ...profiles,
+        [profileKey(researchRecord.title)]: buildIssuerProfileFromRecord(
+          researchRecord,
+          profiles[profileKey(researchRecord.title)],
+          'Auto-updated from live research'
+        ),
+      }));
       setRunStatuses((statuses) => ({ ...statuses, [researchRecord.id]: researchRecord.workflowStatus }));
       setTab('results');
     } catch (error) {
@@ -318,7 +330,11 @@ export default function HomePage() {
     if (!profile?.issuer) return;
     setIssuerProfiles((profiles) => ({
       ...profiles,
-      [profileKey(profile.issuer)]: profile,
+      [profileKey(profile.issuer)]: {
+        ...profile,
+        rating: profile.rating || profile.ratings,
+        ratings: profile.ratings || profile.rating,
+      },
     }));
   }
 
@@ -481,6 +497,14 @@ export default function HomePage() {
       record,
       ...items.filter((item) => item.id !== record.id),
     ].slice(0, 12));
+    setIssuerProfiles((profiles) => ({
+      ...profiles,
+      [profileKey(record.title)]: buildIssuerProfileFromRecord(
+        record,
+        profiles[profileKey(record.title)],
+        'Auto-updated from document intake'
+      ),
+    }));
     setTab('results');
     setReportError(null);
 
@@ -606,6 +630,15 @@ export default function HomePage() {
       window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
       return next;
     });
+
+    setIssuerProfiles((profiles) => ({
+      ...profiles,
+      [profileKey(detail.title)]: buildIssuerProfileFromRecord(
+        { ...detail, generatedReport },
+        profiles[profileKey(detail.title)],
+        'Auto-updated from saved research record'
+      ),
+    }));
   }
 
   useEffect(() => {

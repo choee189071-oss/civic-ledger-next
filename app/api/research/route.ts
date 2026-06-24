@@ -824,6 +824,7 @@ function buildEvidencePackage({
   recencyScope,
   searchQueries,
   searchResults,
+  issuerProfile,
 }: {
   issuer: string;
   modeLabel: string;
@@ -832,6 +833,7 @@ function buildEvidencePackage({
   recencyScope: RecencyScope;
   searchQueries: string[];
   searchResults: SonarSearchResult[];
+  issuerProfile?: Record<string, unknown> | null;
 }) {
   const coverage = buildCoverageDashboardObject(searchResults);
 
@@ -860,6 +862,7 @@ function buildEvidencePackage({
       ],
       note: 'EMMA/MSRB, DebtWatch, SCO ByTheNumbers, CDIAC, and CKAN sources are prioritized through domain-targeted search unless a structured API connector is configured.',
     },
+    issuer_profile_context: issuerProfile ?? null,
     search_queries_used: searchQueries,
     document_inventory: buildDocumentInventory(searchResults).map((item) => ({
       title: item.document,
@@ -1122,6 +1125,10 @@ export async function POST(request: Request) {
   const customAngle = String(body.customAngle ?? '').trim();
   const outputType = String(body.outputType ?? 'credit-memo').trim();
   const workflowOptions = normalizeWorkflowOptions(body.workflowOptions);
+  const issuerProfile = body.issuerProfile && typeof body.issuerProfile === 'object'
+    ? body.issuerProfile as Record<string, unknown>
+    : null;
+  const issuerProfileContext = String(body.issuerProfileContext ?? '').trim();
   const mode = PROMPT_MODE_OPTIONS[promptMode];
   const financeFocused = FINANCE_FOCUSED_MODES.has(promptMode);
   const timestamp = new Date().toISOString();
@@ -1168,6 +1175,9 @@ export async function POST(request: Request) {
     'Answer in the same language as the user.',
     'Be concise, source-grounded, and explicit about dates.',
     'If current evidence is insufficient, say what is missing instead of guessing.',
+    issuerProfileContext
+      ? 'An issuer profile database context may be supplied. Treat it as prior internal context only; verify whether newer evidence exists before relying on it.'
+      : null,
     modeAnswerInstructions(promptMode, financeFocused, recencyScope),
   ].join('\n');
 
@@ -1185,6 +1195,8 @@ export async function POST(request: Request) {
     `Search scope: ${searchQueries.join(' | ')}`,
     `Structured connector scope: ${structuredResults.length > 0 ? 'USAspending API plus preferred official domain search' : 'Preferred official domain search'}`,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
+    issuerProfileContext ? '' : null,
+    issuerProfileContext ? issuerProfileContext : null,
     '',
     'Candidate sources from the Search API, already ranked by source quality:',
     candidateSourceList(classifiedSearchApiResults) || 'No candidate sources returned by the Search API.',
@@ -1257,6 +1269,7 @@ export async function POST(request: Request) {
     recencyScope,
     searchQueries,
     searchResults,
+    issuerProfile,
   });
 
   return NextResponse.json({
@@ -1289,6 +1302,11 @@ export async function POST(request: Request) {
           preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
           fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
         },
+        issuer_profile_used: issuerProfile ? {
+          issuer: issuerProfile.issuer ?? query,
+          last_checked_date: issuerProfile.lastCheckedDate ?? null,
+          coverage_score: issuerProfile.evidenceCoverageScore ?? null,
+        } : null,
       },
       workflowOptions,
       outputType,

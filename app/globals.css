@@ -1852,6 +1852,45 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.profile-health-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.profile-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-summary-grid > div {
+  background: #fbfcfd;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 7px;
+  min-height: 86px;
+  padding: 12px;
+}
+
+.profile-summary-grid span {
+  color: var(--color-faint);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.profile-summary-grid a,
+.profile-summary-grid strong {
+  color: var(--color-primary-dark);
+  font-size: 14px;
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
 .profile-form label {
   color: var(--color-muted);
   display: grid;
@@ -1959,6 +1998,7 @@ h3 {
   }
 
   .profile-form-grid,
+  .profile-summary-grid,
   .section-inline-fields {
     grid-template-columns: 1fr;
   }
