@@ -83,6 +83,37 @@ const workflowOptionLabels = [
   ['includeExport', 'Include export file'],
 ];
 
+const quickStarts = [
+  {
+    label: 'Credit Memo',
+    description: 'Issuer profile, debt, ratings, covenants',
+    promptMode: 'issuer-credit-profile',
+    reportTemplate: 'credit-memo',
+    customAngle: '',
+  },
+  {
+    label: 'Risk Monitor',
+    description: 'Recent developments and watch items',
+    promptMode: 'risk-news-monitoring',
+    reportTemplate: 'risk-monitor',
+    customAngle: '',
+  },
+  {
+    label: 'Document Hunt',
+    description: 'ACFR, OS, EMMA, ratings, board packets',
+    promptMode: 'document-discovery',
+    reportTemplate: 'document-inventory-report',
+    customAngle: '',
+  },
+  {
+    label: 'IC Memo',
+    description: 'Investment committee-ready structure',
+    promptMode: 'issuer-credit-profile',
+    reportTemplate: 'investment-committee-memo',
+    customAngle: 'Focus on relative value, peer context, source gaps, and next diligence checks.',
+  },
+];
+
 export function SearchPanel(props: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const citations = [
@@ -124,6 +155,24 @@ export function SearchPanel(props: Props) {
       <p className="muted small">
         Recency policy: prefer developments from the last 3 months; expand to 6 months only when no fresh issuer-specific evidence is found.
       </p>
+
+      <div className="quick-start-grid" aria-label="Research quick starts">
+        {quickStarts.map((item) => (
+          <button
+            key={item.label}
+            className={props.promptMode === item.promptMode && props.reportTemplate === item.reportTemplate ? 'active' : ''}
+            type="button"
+            onClick={() => {
+              props.onPromptMode(item.promptMode);
+              props.onReportTemplate(item.reportTemplate);
+              props.onCustomAngle(item.customAngle);
+            }}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </button>
+        ))}
+      </div>
 
       {props.researchError && (
         <div className="error-banner">{props.researchError}</div>

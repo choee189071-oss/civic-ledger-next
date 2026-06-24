@@ -422,6 +422,15 @@ export function DetailPanel({
   const evidencePackage = evidencePackageFor(detail);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
+  const primarySourceCount = Object.entries(evidenceQuality.tierCounts)
+    .filter(([key]) => /tier\s*[12]|high/i.test(key))
+    .reduce((total, [, value]) => total + value, 0);
+  const freshEvidenceCount = Object.entries(evidenceQuality.recencyCounts)
+    .filter(([key]) => /3.?month|preferred|fresh/i.test(key))
+    .reduce((total, [, value]) => total + value, 0);
+  const needsReviewCount = Object.entries(evidenceQuality.verificationCounts)
+    .filter(([key]) => /candidate|missing|manual|verify|rejected/i.test(key))
+    .reduce((total, [, value]) => total + value, 0);
   const filenameBase = [
     slug(detail.title || 'issuer'),
     slug(detail.researchModeLabel || detail.topic || 'research'),
@@ -557,6 +566,40 @@ export function DetailPanel({
 
       {activeTab === 'discovery' && (
         <>
+          <section className="answer-section evidence-command">
+            <div className="section-heading">
+              <div>
+                <h3>Evidence command panel</h3>
+                <p className="muted small">Use this before drafting or exporting a deliverable.</p>
+              </div>
+              <span className={`status-pill ${needsReviewCount > 0 ? 'warning' : 'ready'}`}>
+                {evidenceQuality.reason}
+              </span>
+            </div>
+            <div className="evidence-metric-grid">
+              <div>
+                <span>Total evidence</span>
+                <strong>{evidenceQuality.totalSources}</strong>
+                <p>Sources in this research package.</p>
+              </div>
+              <div>
+                <span>Tier 1 / 2</span>
+                <strong>{primarySourceCount}</strong>
+                <p>Primary or official-source candidates.</p>
+              </div>
+              <div>
+                <span>Fresh window</span>
+                <strong>{freshEvidenceCount}</strong>
+                <p>Preferred 3-month evidence signals.</p>
+              </div>
+              <div>
+                <span>Needs review</span>
+                <strong>{needsReviewCount}</strong>
+                <p>Candidate, missing, or manual items.</p>
+              </div>
+            </div>
+          </section>
+
           <section className="answer-section">
             <h3>Research setup</h3>
             <div className="key-value-grid">
@@ -640,8 +683,8 @@ export function DetailPanel({
                   <span>Run research or attach a document to populate evidence quality.</span>
                 </div>
               )}
-              {evidenceSources.map((source) => (
-                <div key={sourceKey(source)} className="mini-table-row">
+              {evidenceSources.map((source, index) => (
+                <div key={`${sourceKey(source) || 'source'}-${index}`} className="mini-table-row">
                   <span>{source.title || source.document || source.url || 'Untitled source'}</span>
                   <span>{source.sourceTier || 'Unclassified'}</span>
                   <span>{source.recencyWindow || source.date || 'Undated source'}</span>
@@ -673,8 +716,8 @@ export function DetailPanel({
                   <span>Status</span>
                   <span>Confidence</span>
                 </div>
-                {detail.coverageDashboard.map((row: any) => (
-                  <div key={row.area} className="mini-table-row">
+                {detail.coverageDashboard.map((row: any, index: number) => (
+                  <div key={`${row.area || 'coverage'}-${index}`} className="mini-table-row">
                     <span>{row.area}</span>
                     <span>{row.status}</span>
                     <span>{row.confidence}</span>
@@ -688,8 +731,8 @@ export function DetailPanel({
             <section className="answer-section">
               <h3>Document inventory</h3>
               <div className="document-list">
-                {detail.documentInventory.map((row: any) => (
-                  <article key={`${row.document}-${row.url ?? row.source}`} className="document-row">
+                {detail.documentInventory.map((row: any, index: number) => (
+                  <article key={`${row.document || 'document'}-${row.url ?? row.source ?? index}`} className="document-row">
                     <div>
                       {row.url ? (
                         <a href={row.url} target="_blank" rel="noreferrer">
@@ -711,8 +754,8 @@ export function DetailPanel({
             <section className="answer-section">
               <h3>Raw evidence notes</h3>
               <div className="stack">
-                {evidencePackage.raw_evidence_notes.slice(0, 8).map((item: any) => (
-                  <div key={`${item.source_title}-${item.claim}`} className="fact-line">
+                {evidencePackage.raw_evidence_notes.slice(0, 8).map((item: any, index: number) => (
+                  <div key={`${item.source_title || 'evidence'}-${item.claim || index}`} className="fact-line">
                     {item.claim}
                   </div>
                 ))}
@@ -724,8 +767,8 @@ export function DetailPanel({
             <section className="answer-section">
               <h3>Missing items</h3>
               <div className="stack">
-                {evidencePackage.missing_items.map((item: string) => (
-                  <div key={item} className="fact-line">{item}</div>
+                {evidencePackage.missing_items.map((item: string, index: number) => (
+                  <div key={`${item}-${index}`} className="fact-line">{item}</div>
                 ))}
               </div>
             </section>

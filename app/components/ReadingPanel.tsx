@@ -50,6 +50,22 @@ function annotatedMarkdown(title: string, content: string, annotations: any[]) {
   ].join('\n');
 }
 
+function documentOutline(content: string) {
+  const headings = content
+    .split('\n')
+    .map((line) => {
+      const match = line.match(/^(#{1,4})\s+(.+)$/);
+      if (!match) return null;
+      return {
+        level: match[1].length,
+        text: match[2].replace(/\*\*/g, '').trim(),
+      };
+    })
+    .filter(Boolean) as Array<{ level: number; text: string }>;
+
+  return headings.length > 0 ? headings.slice(0, 18) : [{ level: 2, text: 'Document body' }];
+}
+
 export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotation, onDeleteAnnotation }: Props) {
   const [mode, setMode] = useState<'preview' | 'edit' | 'annotate'>('preview');
   const [annotationType, setAnnotationType] = useState('Comment');
@@ -57,6 +73,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
   const [annotationNote, setAnnotationNote] = useState('');
   const content = (item?.body || ['Select a result and open reading mode.']).join('\n\n');
   const title = item?.title || 'Reading room';
+  const outline = documentOutline(content);
 
   function addAnnotation() {
     if (!annotationNote.trim()) return;
@@ -131,6 +148,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
         <div>
           <p className="eyebrow">Reading</p>
           <h2>{title}</h2>
+          <p className="muted small">Review, edit, annotate, and export the working file with notes preserved.</p>
         </div>
         <div className="reading-toolbar">
           {[
@@ -149,7 +167,44 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
         </div>
       </div>
 
+      <div className="reading-status-strip">
+        <div>
+          <span>Mode</span>
+          <strong>{mode}</strong>
+        </div>
+        <div>
+          <span>Sections</span>
+          <strong>{outline.length}</strong>
+        </div>
+        <div>
+          <span>Annotations</span>
+          <strong>{annotations.length}</strong>
+        </div>
+        <div>
+          <span>Export</span>
+          <strong>MD / PDF / DOCX</strong>
+        </div>
+      </div>
+
       <div className="reading-workspace">
+        <aside className="document-outline">
+          <div>
+            <p className="eyebrow">Outline</p>
+            <h3>Document sections</h3>
+          </div>
+          <div className="outline-list">
+            {outline.map((entry, index) => (
+              <button
+                key={`${entry.text}-${index}`}
+                className={`outline-level-${Math.min(entry.level, 4)}`}
+                type="button"
+              >
+                {entry.text}
+              </button>
+            ))}
+          </div>
+        </aside>
+
         <div className="reading-document">
           {mode === 'edit' ? (
             <textarea
@@ -159,6 +214,10 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
             />
           ) : (
             <div className="reading-body">
+              <div className="document-page-label">
+                <span>Working draft</span>
+                <strong>{title}</strong>
+              </div>
               <FormattedReport content={content} />
             </div>
           )}

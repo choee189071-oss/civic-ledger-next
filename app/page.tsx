@@ -696,21 +696,46 @@ export default function HomePage() {
     window.localStorage.setItem('civic-ledger-reading-annotations', JSON.stringify(readingAnnotations));
   }, [readingAnnotations, storageReady]);
 
+  const activeRunStatus = detail ? runStatuses[detail.id] ?? detail.workflowStatus ?? defaultRunStatus(detail) : 'No active run';
+  const activeSourceCount = detail
+    ? (detail.documentInventory?.length ?? 0) + (detail.searchResults?.length ?? 0) + (detail.citations?.length ?? 0)
+    : sources.length;
+  const activeProfileCount = Object.keys(issuerProfiles).length;
+
   return (
     <div className="app-shell">
       <Sidebar current={view} onChange={setView} savedRecords={savedRecords} />
       <main className="main">
         <header className="workspace-header">
-          <div>
+          <div className="workspace-title">
             <p className="eyebrow">Research Workspace</p>
             <h1>California public finance desk</h1>
+            <p className="muted small">Live discovery, document parsing, evidence QA, and memo delivery in one analyst workspace.</p>
           </div>
-          <div className="status-strip">
-            <span className="status-pill ready">Build ready</span>
-            <span className="status-pill">Perplexity ready</span>
-            <span className="status-pill">OpenAI writer</span>
-            <span className="status-pill">LlamaParse intake</span>
-            <span className="status-pill">{savedRecords.length} saved</span>
+          <div className="workspace-command">
+            <div className="workspace-kpis">
+              <div>
+                <span>Active run</span>
+                <strong>{activeRunStatus}</strong>
+              </div>
+              <div>
+                <span>Evidence items</span>
+                <strong>{activeSourceCount}</strong>
+              </div>
+              <div>
+                <span>Issuer files</span>
+                <strong>{activeProfileCount}</strong>
+              </div>
+              <div>
+                <span>Saved</span>
+                <strong>{savedRecords.length}</strong>
+              </div>
+            </div>
+            <div className="header-actions">
+              <button className="button-secondary" onClick={() => setView('documents')}>Upload PDF</button>
+              <button className="button-secondary" onClick={() => setView('developments')}>Run monitor</button>
+              <button className="button-primary" onClick={() => setView('library')}>Open library</button>
+            </div>
           </div>
         </header>
 
