@@ -119,6 +119,67 @@ const REPORT_TEMPLATES = {
       'Recommended Monitoring Queries',
     ],
   },
+  'watchlist-monitor': {
+    label: 'Watchlist Monitor',
+    audience: 'portfolio monitor reviewing a saved issuer list for new disclosures, rating changes, board actions, RFPs, and risk signals',
+    sections: [
+      'Watchlist Summary',
+      'Issuer Status Table',
+      'New EMMA / Disclosure Items',
+      'Rating and Outlook Changes',
+      'Board / RFP Signals',
+      'Federal Grant / Single Audit Signals',
+      'No-Update Conclusions',
+      'Retry / Manual Verification Queue',
+      'Source Appendix',
+    ],
+  },
+  'peer-comparison-table': {
+    label: 'Peer Comparison Table',
+    audience: 'analyst comparing municipal issuers or obligors side by side',
+    sections: [
+      'Peer Set Definition',
+      'Metric Comparison Table',
+      'Debt Service Coverage',
+      'Liquidity / Reserve Days',
+      'Debt Burden',
+      'Revenue and Expense Trends',
+      'Ratings / Outlook Context',
+      'Comparable Bond / Benchmark Notes',
+      'Data Gaps',
+      'Source Appendix',
+    ],
+  },
+  'time-series-analysis': {
+    label: 'Time Series Analysis',
+    audience: 'analyst reviewing one issuer across multiple fiscal years',
+    sections: [
+      'Trend Summary',
+      'Metric Table by Fiscal Year',
+      'Revenue and Expense Trend',
+      'Liquidity and Reserve Trend',
+      'Debt Service Coverage Trend',
+      'Outstanding Debt Trend',
+      'Capital Plan / Budget Trend',
+      'Data Gaps and Manual Extraction Items',
+      'Source Appendix',
+    ],
+  },
+  'covenant-tracking': {
+    label: 'Covenant Tracking',
+    audience: 'analyst checking whether OS/POS legal covenants can be verified against current financial documents',
+    sections: [
+      'Covenant Tracking Summary',
+      'Security and Pledge',
+      'Rate Covenant',
+      'Additional Bonds Test',
+      'Debt Service Coverage Compliance Check',
+      'Required Documents',
+      'Latest Financial Evidence',
+      'Compliance Status / Manual Verification',
+      'Source Appendix',
+    ],
+  },
   'source-appendix': {
     label: 'Source Appendix',
     audience: 'analyst who needs a reusable source trail and evidence package appendix',
@@ -426,6 +487,27 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
       'Evidence Coverage Score Method must explain which Tier 1 / Tier 2 sources were counted, which core documents are missing, and why the score is preliminary or review-ready.',
     ]
     : [];
+  const workflowReportRules = templateKey === 'watchlist-monitor'
+    ? [
+      'For Watchlist Monitor, include a table with issuer, latest development status, recency label, source tier, source URL, and next action.',
+      'Treat "No recent change found" as a valid monitoring conclusion only when official or high-quality sources were checked.',
+    ]
+    : templateKey === 'peer-comparison-table'
+      ? [
+        'For Peer Comparison Table, use a side-by-side table. Required columns when available: issuer, sector, rating/outlook, DSC, liquidity/reserve days, debt/revenue, outstanding debt, recent development, source coverage, data gaps.',
+        'Do not force numeric comparisons when source data is missing. Use "Not found" and list the exact document required.',
+      ]
+      : templateKey === 'time-series-analysis'
+        ? [
+          'For Time Series Analysis, organize metrics by fiscal year. Required rows when available: operating revenue, operating expense, liquidity/cash, unrestricted reserves, debt service, DSC, outstanding debt, capital spend.',
+          'Separate audited historical data from budget/forecast data.',
+        ]
+        : templateKey === 'covenant-tracking'
+          ? [
+            'For Covenant Tracking, compare OS/POS legal covenant language to latest ACFR/continuing disclosure evidence.',
+            'Required statuses: Compliant / Not compliant / Not found / Needs manual verification. Never infer compliance without a covenant source and a current financial source.',
+          ]
+          : [];
 
   return [
     'You are Civic Ledger Writer, a senior public finance analyst and report editor.',
@@ -449,6 +531,7 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     ...ratingCommitteeRules,
     ...documentInventoryRules,
     ...executiveSummaryRules,
+    ...workflowReportRules,
     `Audience: ${template.audience}.`,
     `Required report sections, in this order: ${template.sections.join(' | ')}.`,
     'Write in professional English unless the supplied research package is primarily Chinese.',

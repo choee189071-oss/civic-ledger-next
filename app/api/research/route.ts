@@ -74,6 +74,18 @@ const PROMPT_MODE_OPTIONS = {
     label: 'Peer Comparison',
     description: 'Peer issuers, relative credit metrics, and comparable municipal utility context.',
   },
+  'time-series-analysis': {
+    label: 'Time Series',
+    description: 'Cross-year issuer metric trend analysis for DSC, reserves, liquidity, debt, revenue, expenses, and federal awards.',
+  },
+  'covenant-tracking': {
+    label: 'Covenant Tracking',
+    description: 'OS/POS covenant extraction and latest financial document compliance check.',
+  },
+  'watchlist-monitoring': {
+    label: 'Watchlist / Monitoring',
+    description: 'Recent EMMA filings, rating changes, board actions, RFPs, grants, and risk signals for saved issuers.',
+  },
   'custom-prompt': {
     label: 'Custom Prompt',
     description: 'User-defined public finance research angle.',
@@ -89,6 +101,9 @@ const FINANCE_FOCUSED_MODES = new Set<PromptMode>([
   'financial-performance',
   'risk-news-monitoring',
   'peer-comparison',
+  'time-series-analysis',
+  'covenant-tracking',
+  'watchlist-monitoring',
   'custom-prompt',
 ]);
 
@@ -274,13 +289,17 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
       `${issuer} rating report Moody's S&P Fitch Kroll`,
       `${issuer} continuing disclosure EMMA MSRB`,
       `${issuer} investor relations budget capital improvement plan PDF`,
+      `${issuer} single audit schedule of expenditures of federal awards SEFA PDF`,
+      `${issuer} board agenda board packet bond resolution PDF`,
     ],
     'debt-bond-research': [
       `${issuer} official statement revenue bonds`,
       `${issuer} power system revenue bonds official statement`,
       `${issuer} water system revenue bonds official statement`,
+      `${issuer} debt service schedule official statement`,
       `${issuer} debt service coverage`,
       `${issuer} rate covenant additional bonds test`,
+      `${issuer} bond authorization resolution board agenda`,
       `${issuer} EMMA MSRB`,
     ],
     'financial-performance': [
@@ -289,23 +308,50 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
       `${issuer} operating revenues debt service coverage`,
       `${issuer} capital improvement plan`,
       `${issuer} budget financial plan`,
+      `${issuer} rate study rate ordinance`,
+      `${issuer} single audit federal awards SEFA`,
       `${issuer} audited financial statements PDF`,
     ],
     'risk-news-monitoring': [
       `${issuer} rating action`,
       `${issuer} litigation`,
       `${issuer} rate increase`,
-      `${issuer} wildfire risk`,
+      `${issuer} board agenda bond authorization RFP`,
+      `${issuer} municipal advisor bond counsel RFP results`,
       `${issuer} regulatory risk`,
       `${issuer} recent developments`,
     ],
     'peer-comparison': [
-      `${issuer} peer comparison municipal utility`,
-      `${issuer} compared with SMUD NYPA LADWP TWDB`,
+      `${issuer} peer comparison municipal issuer same sector`,
       `${issuer} rating report peer comparison`,
-      `${issuer} public power credit metrics`,
-      `${issuer} municipal utility debt service coverage peers`,
-      `${issuer} revenue bond rating medians`,
+      `${issuer} debt service coverage reserves liquidity peer comparison`,
+      `${issuer} rating medians municipal peer ratios`,
+      `${issuer} official statement comparable bonds spread MMD`,
+      `${issuer} benchmark yield spread comparable municipal bonds`,
+    ],
+    'time-series-analysis': [
+      `${issuer} ACFR 2025 2024 2023 financial statements`,
+      `${issuer} annual comprehensive financial report multiple years`,
+      `${issuer} debt service coverage liquidity reserves historical`,
+      `${issuer} revenues expenses net position time series`,
+      `${issuer} outstanding debt debt service schedule historical`,
+      `${issuer} budget actual financial performance trend`,
+    ],
+    'covenant-tracking': [
+      `${issuer} official statement rate covenant additional bonds test`,
+      `${issuer} debt service coverage covenant compliance annual disclosure`,
+      `${issuer} continuing disclosure rate covenant debt service coverage`,
+      `${issuer} ACFR debt service coverage revenue bonds`,
+      `${issuer} rate study rate ordinance covenant`,
+      `${issuer} board agenda bond resolution covenant`,
+    ],
+    'watchlist-monitoring': [
+      `${issuer} EMMA continuing disclosure recent filing`,
+      `${issuer} rating action outlook recent`,
+      `${issuer} board agenda bond authorization RFP`,
+      `${issuer} municipal advisor bond counsel underwriter RFP`,
+      `${issuer} budget audit ACFR recent`,
+      `${issuer} USAspending federal award grant recent`,
     ],
     'custom-prompt': [
       custom,
@@ -314,6 +360,8 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
       `${issuer} continuing disclosure EMMA MSRB`,
       `${issuer} audited financial statements PDF`,
       `${issuer} rating report Moody's S&P Fitch`,
+      `${issuer} board agenda minutes bond authorization RFP`,
+      `${issuer} rate study rate ordinance single audit`,
     ],
   };
 
@@ -328,6 +376,10 @@ function documentTypeFor(result: SonarSearchResult) {
 
   if (/annual comprehensive financial report|\bacfr\b|audited financial|financial statements/.test(text)) {
     return 'ACFR / Audited Financial Statements';
+  }
+
+  if (/single audit|uniform guidance|schedule of expenditures of federal awards|\bsefa\b/.test(text)) {
+    return 'Single Audit / Federal Awards';
   }
 
   if (/preliminary official statement|\bpos\b/.test(text)) {
@@ -358,8 +410,16 @@ function documentTypeFor(result: SonarSearchResult) {
     return /capital improvement|\bcip\b/.test(text) ? 'Capital Improvement Plan' : 'Budget';
   }
 
+  if (/debt service schedule/.test(text)) {
+    return 'Debt Service Schedule';
+  }
+
+  if (/rate covenant|additional bonds test|additional bonds covenant|covenant compliance/.test(text)) {
+    return 'Covenant / Legal Security';
+  }
+
   if (/rate study|rate action|rate increase|rate ordinance/.test(text)) {
-    return 'Rate Study';
+    return 'Rate Study / Rate Ordinance';
   }
 
   if (/litigation|wildfire|regulatory|risk|lawsuit|court/.test(text)) {
@@ -374,8 +434,8 @@ function documentTypeFor(result: SonarSearchResult) {
     return 'Technical Study';
   }
 
-  if (/board|city clerk|clerk filing|ordinance|resolution/.test(text)) {
-    return 'Board / City Clerk Filing';
+  if (/board|agenda|minutes|packet|city clerk|clerk filing|ordinance|resolution/.test(text)) {
+    return 'Board Agenda / Minutes';
   }
 
   return 'Other';
@@ -386,7 +446,7 @@ function classifySourceTier(result: SonarSearchResult) {
   const docType = documentTypeFor(result);
 
   if (
-    /annual comprehensive financial report|\bacfr\b|audited financial|official statement|preliminary official statement|\bpos\b|emma|msrb|continuing disclosure|rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra|bondholder|investor relation|revenue bond/.test(text)
+    /annual comprehensive financial report|\bacfr\b|audited financial|single audit|schedule of expenditures of federal awards|\bsefa\b|official statement|preliminary official statement|\bpos\b|emma|msrb|continuing disclosure|rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra|bondholder|investor relation|revenue bond/.test(text)
   ) {
     return {
       rank: 1,
@@ -398,7 +458,7 @@ function classifySourceTier(result: SonarSearchResult) {
   }
 
   if (
-    /\.gov\b|ladwp\.com|official|issuer|board report|budget|capital improvement|\bcip\b|rate study|regulatory filing|financial plan|treasurer\.ca\.gov|ebudget\.ca\.gov|debtwatch\.treasurer\.ca\.gov|bythenumbers\.sco\.ca\.gov|usaspending\.gov|data\.ca\.gov/.test(text)
+    /\.gov\b|ladwp\.com|official|issuer|board report|board agenda|board minutes|board packet|budget|capital improvement|\bcip\b|rate study|rate ordinance|regulatory filing|financial plan|treasurer\.ca\.gov|ebudget\.ca\.gov|debtwatch\.treasurer\.ca\.gov|bythenumbers\.sco\.ca\.gov|usaspending\.gov|data\.ca\.gov/.test(text)
   ) {
     return {
       rank: 2,
@@ -492,6 +552,10 @@ function buildCoverageDashboard(results: SonarSearchResult[]) {
     ['Debt documents', /official statement|preliminary official statement|\bpos\b|revenue bond|debt|bondholder/],
     ['Ratings', /rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra/],
     ['Continuing disclosure', /emma|msrb|continuing disclosure|annual disclosure/],
+    ['Budget / CIP', /budget|capital improvement|\bcip\b|financial plan/],
+    ['Rate study / covenant', /rate study|rate ordinance|rate covenant|additional bonds test|debt service coverage/],
+    ['Board materials', /board|agenda|minutes|packet|resolution|ordinance|rfp/],
+    ['Single audit / federal awards', /single audit|schedule of expenditures of federal awards|\bsefa\b|usaspending|federal award|federal grant/],
     ['Recent risk events', /litigation|wildfire|regulatory|rate increase|recent developments|risk/],
   ].map(([area, pattern]) => ({
     area,
@@ -599,6 +663,18 @@ function buildCoverageDashboardObject(results: SonarSearchResult[]) {
     recent_risk_events: normalizeCoverage(
       coverageStatus(results, /litigation|wildfire|regulatory|rate increase|recent developments|risk/)
     ),
+    budget_cip: normalizeCoverage(
+      coverageStatus(results, /budget|capital improvement|\bcip\b|financial plan/)
+    ),
+    rate_covenant: normalizeCoverage(
+      coverageStatus(results, /rate study|rate ordinance|rate covenant|additional bonds test|debt service coverage/)
+    ),
+    board_materials: normalizeCoverage(
+      coverageStatus(results, /board|agenda|minutes|packet|resolution|ordinance|rfp/)
+    ),
+    single_audit_federal_awards: normalizeCoverage(
+      coverageStatus(results, /single audit|schedule of expenditures of federal awards|\bsefa\b|usaspending|federal award|federal grant/)
+    ),
   };
 }
 
@@ -623,6 +699,10 @@ function buildMissingItems(coverage: Record<string, { status: string; confidence
     ratings: "Current rating reports or rating action pages from Moody's, S&P, Fitch, or KBRA",
     continuing_disclosure: 'Latest EMMA / MSRB annual continuing disclosure filing',
     recent_risk_events: 'Recent risk event scan and monitoring update',
+    budget_cip: 'Budget / CIP',
+    rate_covenant: 'Rate study, rate ordinance, or covenant evidence',
+    board_materials: 'Board agenda, minutes, packet, resolution, or RFP evidence',
+    single_audit_federal_awards: 'Single Audit / SEFA or USAspending federal award evidence',
   };
 
   return Object.entries(coverage)
@@ -804,30 +884,45 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     '| Document | Type | Source Tier | Date | Recency | Source | Status | Notes |',
     '|---|---|---|---|---|---|---|---|',
     '',
-    '6. Coverage Dashboard',
+    '6. Document Extraction Targets',
+    '| Document Type | Extract / Verify | Why It Matters |',
+    '|---|---|---|',
+    '| ACFR / audited financial statements | MD&A, Statement of Net Position, cash/investments, unrestricted reserves, operating revenue/expense, debt service coverage if available | Core financial trend and liquidity evidence |',
+    '| Official Statement / POS | Security, pledge, flow of funds, debt service schedule, rate covenant, additional bonds test, risks, continuing disclosure undertaking | Legal security and bondholder protections |',
+    '| Continuing Disclosure / EMMA annual report | Updated financial metrics, covenant compliance, event notices, filing date, CUSIP | Current disclosure and monitoring status |',
+    '| Budget / CIP | adopted budget, major revenue/expenditure assumptions, capital plan, funding sources | Forward-looking management and capital needs |',
+    '| Rate Study / Rate Ordinance | approved rate path, affordability, coverage targets, rate covenant support | Revenue sufficiency and political/implementation risk |',
+    '| Board Agenda / Minutes / Packet | bond authorization, bond resolution, municipal advisor/bond counsel hires, RFP approval/results | Early signal before market documents appear |',
+    '| Single Audit / SEFA | federal awards, findings, questioned costs, major programs | Federal grant recipient risk and compliance |',
+    '',
+    '7. Coverage Dashboard',
     '| Evidence Area | Status | Confidence |',
     '|---|---|---|',
     '| Audited financials | Found / Missing | High / Medium / Low |',
     '| Debt documents | Found / Missing | High / Medium / Low |',
     '| Ratings | Found / Missing | High / Medium / Low |',
     '| Continuing disclosure | Found / Missing | High / Medium / Low |',
+    '| Budget / CIP | Found / Missing | High / Medium / Low |',
+    '| Rate study / covenant | Found / Missing | High / Medium / Low |',
+    '| Board materials | Found / Missing | High / Medium / Low |',
+    '| Single audit / federal awards | Found / Missing | High / Medium / Low |',
     '| Recent risk events | Found / Missing | High / Medium / Low |',
     '',
-    '7. Working Conclusion',
+    '8. Working Conclusion',
     'Only provide conclusions supported by Tier 1 or Tier 2 sources.',
     '',
-    '8. Key Credit Considerations',
+    '9. Key Credit Considerations',
     '- Strengths:',
     '- Risks:',
     '- Recent developments:',
     '- Financial metrics:',
     '- Debt / covenant considerations:',
     '',
-    '9. Missing Data / Limits',
+    '10. Missing Data / Limits',
     'Explicitly state what cannot be concluded due to missing documents.',
     noRecentInfoGuide(),
     '',
-    '10. Next Search Queries',
+    '11. Next Search Queries',
     'List exact follow-up queries to improve evidence coverage.',
   ].join('\n');
 }

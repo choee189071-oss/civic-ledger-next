@@ -1,3 +1,5 @@
+"use client";
+
 type Props = {
   items: any[];
   detail: any;
@@ -32,6 +34,33 @@ function uniqueByUrl(items: any[]) {
 
 function sourceKey(item: any) {
   return (item.url || item.source_url || item.title || item.document || '').toLowerCase();
+}
+
+function slug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'document';
+}
+
+function downloadText(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function canExtract(source: any) {
+  const text = `${source.url ?? ''} ${source.documentType ?? ''} ${source.title ?? ''}`.toLowerCase();
+  return (
+    text.includes('.pdf') ||
+    /acfr|audited|official statement|preliminary official statement|continuing disclosure|budget|rate study|rate ordinance|board|agenda|minutes|packet|single audit|sefa/.test(text)
+  );
 }
 
 function currentRunSources(detail: any) {
@@ -84,6 +113,40 @@ function currentRunSources(detail: any) {
 
 export function SourcesPanel({ items, detail, savedRecords, sourceStatuses, onSourceStatusChange }: Props) {
   const runSources = currentRunSources(detail);
+
+  async function extractSource(source: any) {
+    if (!source.url) return;
+
+    const res = await fetch('/api/documents/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: source.title || sourceLabel(source.url),
+        url: source.url,
+        documentType: source.documentType || 'Public finance document',
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      window.alert(payload.error || 'Document extraction failed.');
+      return;
+    }
+
+    const extraction = payload.extraction;
+    downloadText(
+      [
+        `# ${extraction.title}`,
+        '',
+        `Document type: ${extraction.documentType}`,
+        `Source: ${extraction.url}`,
+        `Extracted: ${extraction.extractedAt}`,
+        '',
+        extraction.markdown,
+      ].join('\n'),
+      `${slug(extraction.title)}_extraction.md`
+    );
+  }
 
   return (
     <section className="full-page-panel source-list-page">
@@ -141,6 +204,11 @@ export function SourcesPanel({ items, detail, savedRecords, sourceStatuses, onSo
                       <a className="button-secondary source-open-button" href={source.url} target="_blank" rel="noreferrer">
                         Open
                       </a>
+                    )}
+                    {source.url && canExtract(source) && (
+                      <button className="button-secondary source-open-button" onClick={() => extractSource(source)}>
+                        Extract
+                      </button>
                     )}
                   </div>
                 </article>

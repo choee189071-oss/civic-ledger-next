@@ -48,6 +48,9 @@ const promptModes = [
   ['financial-performance', 'Financial Performance'],
   ['risk-news-monitoring', 'Risk / News Monitoring'],
   ['peer-comparison', 'Peer Comparison'],
+  ['time-series-analysis', 'Time Series'],
+  ['covenant-tracking', 'Covenant Tracking'],
+  ['watchlist-monitoring', 'Watchlist / Monitoring'],
   ['custom-prompt', 'Custom Prompt'],
 ];
 
@@ -61,6 +64,10 @@ const outputTypes = [
   ['board-briefing', 'Board Briefing'],
   ['executive-summary', 'Executive Summary'],
   ['risk-monitor', 'Risk Monitor'],
+  ['watchlist-monitor', 'Watchlist Monitor'],
+  ['peer-comparison-table', 'Peer Comparison Table'],
+  ['time-series-analysis', 'Time Series Analysis'],
+  ['covenant-tracking', 'Covenant Tracking'],
   ['source-appendix', 'Source Appendix'],
   ['custom-report', 'Custom Report'],
 ];

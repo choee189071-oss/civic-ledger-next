@@ -32,6 +32,10 @@ const reportTemplates = [
   ['board-briefing', 'Board Briefing'],
   ['executive-summary', 'Executive Summary'],
   ['risk-monitor', 'Risk Monitor'],
+  ['watchlist-monitor', 'Watchlist Monitor'],
+  ['peer-comparison-table', 'Peer Comparison Table'],
+  ['time-series-analysis', 'Time Series Analysis'],
+  ['covenant-tracking', 'Covenant Tracking'],
   ['source-appendix', 'Source Appendix'],
   ['custom-report', 'Custom Report'],
 ];

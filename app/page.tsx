@@ -9,6 +9,7 @@ import { ReadingPanel } from './components/ReadingPanel';
 import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
 import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
 import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
+import { WorkflowCenterPanel } from './components/WorkflowCenterPanel';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -471,6 +472,35 @@ export default function HomePage() {
     });
   }
 
+  function startWorkflowRun(workflow: {
+    query: string;
+    promptMode: string;
+    customAngle: string;
+    outputType: string;
+    source?: string;
+    sort?: string;
+  }) {
+    setQuery(workflow.query);
+    setPromptMode(workflow.promptMode);
+    setCustomAngle(workflow.customAngle);
+    setReportTemplate(workflow.outputType);
+    setTopic('all');
+    setSource(workflow.source ?? 'all');
+    setSort(workflow.sort ?? 'freshness');
+    setGeneratedReport(null);
+    setReportError(null);
+    setView('search');
+    void runResearch({
+      query: workflow.query,
+      promptMode: workflow.promptMode,
+      customAngle: workflow.customAngle,
+      outputType: workflow.outputType,
+      topic: 'all',
+      source: workflow.source ?? 'all',
+      sort: workflow.sort ?? 'freshness',
+    });
+  }
+
   function openCurrentReading() {
     if (!detail) return;
 
@@ -669,6 +699,13 @@ export default function HomePage() {
           <IssuerDevelopmentsPanel
             savedRecords={savedRecords}
             onRunIssuerScan={startIssuerDevelopmentScan}
+          />
+        )}
+        {view === 'workflows' && (
+          <WorkflowCenterPanel
+            savedRecords={savedRecords}
+            issuerProfiles={issuerProfiles}
+            onRunWorkflow={startWorkflowRun}
           />
         )}
         {view === 'profiles' && (
