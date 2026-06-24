@@ -24,6 +24,7 @@ import {
   type FailureClassification,
   type RetrievalDiagnostics,
 } from '../../../lib/research-diagnostics';
+import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -1347,6 +1348,8 @@ export async function POST(request: Request) {
       : 'General research mode.',
     ...sourceFacts(searchResults),
   ];
+  const documentInventory = buildDocumentInventory(searchResults);
+  const coverageDashboard = buildCoverageDashboard(searchResults);
   const evidencePackage = buildEvidencePackage({
     issuer: researchSubject,
     modeLabel: mode.label,
@@ -1361,6 +1364,19 @@ export async function POST(request: Request) {
     retrievalDiagnostics,
     failureClassification,
   });
+  const evidenceEngine = buildEvidenceEngine({
+    title: researchSubject,
+    facts,
+    citations,
+    searchResults,
+    documentInventory,
+    coverageDashboard,
+    evidencePackage,
+  }, content);
+  const enrichedEvidencePackage = {
+    ...evidencePackage,
+    evidence_engine: evidenceEngine,
+  };
 
   return NextResponse.json({
     record: {
@@ -1406,7 +1422,9 @@ export async function POST(request: Request) {
       },
       workflowOptions,
       outputType,
-      evidencePackage,
+      evidencePackage: enrichedEvidencePackage,
+      evidenceEngine,
+      evidenceCoverageScore: evidenceEngine.coveragePercent,
       documentDiagnostics,
       retrievalDiagnostics,
       failureClassification,
@@ -1415,8 +1433,8 @@ export async function POST(request: Request) {
       customAngle,
       financeFocused,
       coreFinanceDocumentsFound: finalCoreFinanceDocumentsFound,
-      documentInventory: buildDocumentInventory(searchResults),
-      coverageDashboard: buildCoverageDashboard(searchResults),
+      documentInventory,
+      coverageDashboard,
       searchQueries,
       relatedQuestions: sonar.related_questions ?? [],
       generatedAt: timestamp,

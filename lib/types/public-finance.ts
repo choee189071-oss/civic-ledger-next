@@ -22,6 +22,8 @@ export type GeneratedReport = {
   usage?: unknown;
   sectionTitle?: string | null;
   editedAt?: string;
+  evidenceEngine?: Record<string, unknown>;
+  evidenceCoverageScore?: number;
 };
 
 export type ReportVersion = {
@@ -99,6 +101,8 @@ export type ResearchRecord = {
   workflowInput?: Record<string, unknown>;
   workflowOptions?: Record<string, boolean>;
   evidencePackage?: Record<string, unknown>;
+  evidenceEngine?: Record<string, unknown>;
+  evidenceCoverageScore?: number;
   documentDiagnostics?: Record<string, unknown>;
   retrievalDiagnostics?: Record<string, unknown>;
   failureClassification?: Record<string, unknown>;

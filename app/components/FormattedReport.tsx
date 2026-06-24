@@ -1,6 +1,9 @@
+import type { EvidenceCoverage } from '../../lib/evidence-engine';
+
 type Props = {
   content: string;
   compact?: boolean;
+  evidenceEngine?: EvidenceCoverage | null;
 };
 
 type Block =
@@ -78,6 +81,77 @@ function renderHeading(level: number, text: string, index: number) {
   }
 
   return <h4 key={key}>{content}</h4>;
+}
+
+function normalizeEvidenceText(value: string) {
+  return value
+    .replace(/\*\*/g, '')
+    .replace(/`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9$%.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function evidenceCitationForText(value: string, evidenceEngine?: EvidenceCoverage | null) {
+  if (!evidenceEngine?.citations?.length) return null;
+
+  const target = normalizeEvidenceText(value);
+  if (target.length < 18) return null;
+
+  return evidenceEngine.citations.find((citation) => {
+    const statement = normalizeEvidenceText(citation.statement);
+    if (!statement) return false;
+    if (statement.includes(target) || target.includes(statement)) return true;
+
+    const targetTokens = new Set(target.split(' ').filter((token) => token.length > 3));
+    const overlap = statement
+      .split(' ')
+      .filter((token) => token.length > 3 && targetTokens.has(token)).length;
+
+    return overlap >= 5;
+  }) ?? null;
+}
+
+function renderEvidencePill(value: string, evidenceEngine?: EvidenceCoverage | null) {
+  if (!evidenceEngine) return null;
+
+  const citation = evidenceCitationForText(value, evidenceEngine);
+
+  if (!citation) {
+    return <span className="evidence-citation-pill missing">Evidence missing</span>;
+  }
+
+  const label = [
+    citation.source,
+    citation.page && citation.page !== 'N/A' ? `p. ${citation.page}` : 'page N/A',
+    citation.confidence,
+  ].filter(Boolean).join(' / ');
+
+  if (citation.citationUrl) {
+    return (
+      <a
+        className={`evidence-citation-pill ${citation.confidence.toLowerCase()}`}
+        href={citation.citationUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={`${citation.document} - ${citation.section}`}
+      >
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <span
+      className={`evidence-citation-pill ${citation.confidence.toLowerCase()}`}
+      title={`${citation.document} - ${citation.section}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function hasPreliminaryStatus(content: string) {
@@ -188,9 +262,10 @@ function parseBlocks(content: string): Block[] {
   return blocks;
 }
 
-export function FormattedReport({ content, compact = false }: Props) {
+export function FormattedReport({ content, compact = false, evidenceEngine = null }: Props) {
   const blocks = parseBlocks(content || '');
   const showPreliminaryBanner = !compact && hasPreliminaryStatus(content || '');
+  const showInlineEvidence = !compact && Boolean(evidenceEngine);
 
   return (
     <div className={`formatted-report ${compact ? 'compact' : ''}`}>
@@ -213,7 +288,10 @@ export function FormattedReport({ content, compact = false }: Props) {
           return (
             <Tag key={`list-${index}`}>
               {block.items.map((item) => (
-                <li key={item}>{renderInline(item)}</li>
+                <li key={item}>
+                  {renderInline(item)}
+                  {showInlineEvidence && renderEvidencePill(item, evidenceEngine)}
+                </li>
               ))}
             </Tag>
           );
@@ -245,7 +323,12 @@ export function FormattedReport({ content, compact = false }: Props) {
           );
         }
 
-        return <p key={`${block.text}-${index}`}>{renderInline(block.text)}</p>;
+        return (
+          <p key={`${block.text}-${index}`}>
+            {renderInline(block.text)}
+            {showInlineEvidence && renderEvidencePill(block.text, evidenceEngine)}
+          </p>
+        );
       })}
     </div>
   );

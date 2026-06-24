@@ -8,6 +8,7 @@ import {
   classifyResearchFailure,
   sourceCandidatesFromRecord,
 } from '../../lib/research-diagnostics';
+import { buildEvidenceEngine, type EvidenceCoverage } from '../../lib/evidence-engine';
 
 type Props = {
   detail: any;
@@ -176,7 +177,8 @@ function exportDashboardMarkdown(
   evidencePackage: any,
   sourceStatuses: Record<string, string>,
   runStatus: string,
-  reportTemplate: string
+  reportTemplate: string,
+  evidenceEngine?: EvidenceCoverage | null
 ) {
   const sources = allSourceCandidates(detail, evidencePackage);
   const coverageRows = normalizeCoverageRows(evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? []);
@@ -201,12 +203,60 @@ function exportDashboardMarkdown(
     `| Output type | ${mdCell(templateLabel(reportTemplate))} |`,
     `| Research mode | ${mdCell(detail.researchModeLabel ?? detail.topic ?? 'Not found')} |`,
     `| Evidence coverage | ${mdCell(detail.evidenceQualitySummary ?? `${coverageRows.length || 'No'} coverage areas tracked; ${missingCoverage} missing/manual items flagged`)} |`,
+    `| Evidence coverage score | ${evidenceEngine ? `${evidenceEngine.coveragePercent}%` : 'Not calculated'} |`,
+    `| Evidence confidence | ${evidenceEngine?.confidence ?? 'Not calculated'} |`,
+    `| Statement citations | ${evidenceEngine ? `${evidenceEngine.citationCount} of ${evidenceEngine.totalStatements}` : 'Not calculated'} |`,
     `| Tier 1 / primary sources | ${tier1Count} candidate records |`,
     `| Fresh 3-month evidence | ${freshCount} candidate records |`,
     `| 6-month fallback evidence | ${fallbackCount} candidate records |`,
     `| Manual verification / gaps | ${manualCount + missingCoverage} items |`,
     `| Generated at | ${mdCell(generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString())} |`,
   ].join('\n');
+}
+
+function evidenceEngineMarkdown(evidenceEngine: EvidenceCoverage | null | undefined) {
+  if (!evidenceEngine) {
+    return [
+      '## Evidence Coverage Score',
+      '',
+      'Evidence coverage was not calculated for this export.',
+    ].join('\n');
+  }
+
+  const citationRows = evidenceEngine.citations.map((citation) => [
+    citation.statement,
+    citation.source,
+    citation.document,
+    citation.page,
+    citation.section,
+    citation.confidence,
+    citation.citationUrl || citation.url || 'Not found',
+  ]);
+
+  const lines = [
+    '## Evidence Coverage Score',
+    '',
+    '| Metric | Value |',
+    '|---|---|',
+    `| Coverage | ${evidenceEngine.coveragePercent}% |`,
+    `| Confidence | ${evidenceEngine.confidence} |`,
+    `| Evidence citations | ${evidenceEngine.citationCount} |`,
+    `| Missing evidence statements | ${evidenceEngine.missingStatements} |`,
+    evidenceEngine.warning ? `| Warning | ${mdCell(evidenceEngine.warning)} |` : '',
+    '',
+    '## Evidence Panel',
+    '',
+    '| AI Statement | Source | Document | Page | Section | Confidence | Citation |',
+    '|---|---|---|---|---|---|---|',
+    ...citationRows.map((row) => `| ${row.map(mdCell).join(' | ')} |`),
+    evidenceEngine.missingEvidence.length > 0 ? '' : '',
+    evidenceEngine.missingEvidence.length > 0 ? '## Missing Evidence Warning' : '',
+    ...evidenceEngine.missingEvidence.map((statement) => `- ${statement}`),
+  ];
+
+  return lines
+    .filter((line, index, list) => line !== '' || list[index - 1] !== '')
+    .join('\n');
 }
 
 function markdownFor(
@@ -219,13 +269,16 @@ function markdownFor(
   const title = generatedReport?.title || detail.title || 'Research Report';
   const report = generatedReport?.content || detail.snippet || '';
   const evidencePackage = evidencePackageFor(detail);
+  const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
 
   return [
     `# ${title}`,
     '',
     `Generated: ${generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString()}`,
     '',
-    exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate),
+    exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate, evidenceEngine),
+    '',
+    evidenceEngineMarkdown(evidenceEngine),
     '',
     report,
     '',
@@ -244,6 +297,20 @@ function evidencePackageFor(detail: any) {
     raw_evidence_notes: detail.facts ?? [],
     missing_items: [],
   };
+}
+
+function evidenceEngineFor(detail: any, generatedReport: any | null, evidencePackage: any): EvidenceCoverage {
+  const packaged = generatedReport?.evidenceEngine ||
+    (!generatedReport ? detail?.evidenceEngine || evidencePackage?.evidence_engine : null);
+
+  if (packaged?.citations && Array.isArray(packaged.citations) && !generatedReport?.editedAt) {
+    return packaged as EvidenceCoverage;
+  }
+
+  return buildEvidenceEngine({
+    ...detail,
+    evidencePackage,
+  }, generatedReport?.content || detail?.snippet || '');
 }
 
 function templateLabel(value: string) {
@@ -510,6 +577,7 @@ export function DetailPanel({
 
   const input = workflowInput(detail, reportTemplate);
   const evidencePackage = evidencePackageFor(detail);
+  const evidenceEngine = evidenceEngineFor(detail, generatedReport, evidencePackage);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
   const documentDiagnostics = documentDiagnosticsFor(detail, evidencePackage);
@@ -528,12 +596,6 @@ export function DetailPanel({
     .filter((source) => entryDocumentTitle(source))
     .slice(0, 3);
   const recentResearch = recentResearchFor(detail, generatedReport, input, reportTemplate);
-  const primarySourceCount = Object.entries(evidenceQuality.tierCounts)
-    .filter(([key]) => /tier\s*[12]|high/i.test(key))
-    .reduce((total, [, value]) => total + value, 0);
-  const freshEvidenceCount = Object.entries(evidenceQuality.recencyCounts)
-    .filter(([key]) => /3.?month|preferred|fresh/i.test(key))
-    .reduce((total, [, value]) => total + value, 0);
   const needsReviewCount = Object.entries(evidenceQuality.verificationCounts)
     .filter(([key]) => /candidate|missing|manual|verify|rejected/i.test(key))
     .reduce((total, [, value]) => total + value, 0);
@@ -554,7 +616,7 @@ export function DetailPanel({
 
   function downloadEvidenceJson() {
     downloadBlob(
-      JSON.stringify(evidencePackage, null, 2),
+      JSON.stringify({ ...evidencePackage, evidence_engine: evidenceEngine }, null, 2),
       `${slug(detail.title || 'issuer')}_${slug(detail.researchModeLabel || 'research')}_evidence_package_${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8'
     );
@@ -747,26 +809,98 @@ export function DetailPanel({
             </div>
             <div className="evidence-metric-grid">
               <div>
-                <span>Total evidence</span>
-                <strong>{evidenceQuality.totalSources}</strong>
-                <p>Sources in this research package.</p>
+                <span>Coverage score</span>
+                <strong>{evidenceEngine.coveragePercent}%</strong>
+                <p>AI statements mapped to direct evidence.</p>
               </div>
               <div>
-                <span>Tier 1 / 2</span>
-                <strong>{primarySourceCount}</strong>
-                <p>Primary or official-source candidates.</p>
+                <span>Confidence</span>
+                <strong>{evidenceEngine.confidence}</strong>
+                <p>Combined source tier, match quality, and page support.</p>
               </div>
               <div>
-                <span>Fresh window</span>
-                <strong>{freshEvidenceCount}</strong>
-                <p>Preferred 3-month evidence signals.</p>
+                <span>Evidence</span>
+                <strong>{evidenceEngine.citationCount}</strong>
+                <p>Clickable citations attached to statements.</p>
               </div>
               <div>
-                <span>Needs review</span>
-                <strong>{needsReviewCount}</strong>
-                <p>Candidate, missing, or manual items.</p>
+                <span>Missing</span>
+                <strong>{evidenceEngine.missingStatements}</strong>
+                <p>Statements needing a source, page, or reviewer note.</p>
               </div>
             </div>
+          </section>
+
+          {evidenceEngine.warning && (
+            <section className="missing-evidence-warning">
+              <div>
+                <p className="eyebrow">Missing evidence warning</p>
+                <h3>Do not treat unsupported statements as final.</h3>
+                <p>{evidenceEngine.warning}</p>
+              </div>
+              <strong>{evidenceEngine.coveragePercent}% covered</strong>
+            </section>
+          )}
+
+          <section className="answer-section evidence-panel-section">
+            <div className="section-heading">
+              <div>
+                <h3>Evidence panel</h3>
+                <p className="muted small">Each AI statement is mapped to source, document, page, section, confidence, and a clickable citation.</p>
+              </div>
+              <span className={`status-pill ${evidenceEngine.warning ? 'warning' : 'ready'}`}>
+                {evidenceEngine.citationCount} citations
+              </span>
+            </div>
+            <div className="mini-table evidence-statement-table">
+              <div className="mini-table-row header">
+                <span>AI Statement</span>
+                <span>Source</span>
+                <span>Document</span>
+                <span>Page</span>
+                <span>Section</span>
+                <span>Confidence</span>
+                <span>Citation</span>
+              </div>
+              {evidenceEngine.citations.length === 0 && (
+                <div className="mini-table-row">
+                  <span>No statement-level evidence mapping yet.</span>
+                  <span>Not found</span>
+                  <span>Not found</span>
+                  <span>N/A</span>
+                  <span>Not found</span>
+                  <span>Low</span>
+                  <span>Add source</span>
+                </div>
+              )}
+              {evidenceEngine.citations.map((citation) => (
+                <div key={citation.id} className="mini-table-row">
+                  <span>{citation.statement}</span>
+                  <span>{citation.source}</span>
+                  <span>{citation.document}</span>
+                  <span>{citation.page}</span>
+                  <span>{citation.section}</span>
+                  <span className={`evidence-confidence ${citation.confidence.toLowerCase()}`}>{citation.confidence}</span>
+                  <span>
+                    {citation.citationUrl ? (
+                      <a href={citation.citationUrl} target="_blank" rel="noreferrer">
+                        {citation.page !== 'N/A' ? 'Open PDF page' : 'Open source'}
+                      </a>
+                    ) : (
+                      'No URL'
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {evidenceEngine.missingEvidence.length > 0 && (
+              <div className="missing-evidence-list">
+                <h4>Statements without direct evidence</h4>
+                {evidenceEngine.missingEvidence.slice(0, 8).map((statement, index) => (
+                  <p key={`${statement}-${index}`}>{statement}</p>
+                ))}
+              </div>
+            )}
           </section>
 
           {failureClassification && (
@@ -1072,6 +1206,34 @@ export function DetailPanel({
               </div>
               <h3>{generatedReport.title}</h3>
 
+              <div className="report-evidence-summary">
+                <div>
+                  <span>Evidence Coverage</span>
+                  <strong>{evidenceEngine.coveragePercent}%</strong>
+                </div>
+                <div>
+                  <span>Confidence</span>
+                  <strong>{evidenceEngine.confidence}</strong>
+                </div>
+                <div>
+                  <span>Citations</span>
+                  <strong>{evidenceEngine.citationCount}</strong>
+                </div>
+                <div>
+                  <span>Missing Evidence</span>
+                  <strong>{evidenceEngine.missingStatements}</strong>
+                </div>
+              </div>
+
+              {evidenceEngine.warning && (
+                <div className="missing-evidence-warning compact-warning">
+                  <div>
+                    <p className="eyebrow">Evidence warning</p>
+                    <p>{evidenceEngine.warning}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="report-toolbar">
                 <button className="button-secondary" onClick={() => setIsEditingReport((editing) => !editing)}>
                   {isEditingReport ? 'Preview Report' : 'Edit Report'}
@@ -1091,7 +1253,7 @@ export function DetailPanel({
                   onChange={(event) => onUpdateReportContent(event.target.value)}
                 />
               ) : (
-                <FormattedReport content={generatedReport.content} />
+                <FormattedReport content={generatedReport.content} evidenceEngine={evidenceEngine} />
               )}
 
               <section className="section-regeneration">

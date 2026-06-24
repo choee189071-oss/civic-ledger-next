@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { buildEvidenceEngine } from '../../../lib/evidence-engine';
 
 export const runtime = 'nodejs';
 
@@ -586,6 +587,7 @@ function reportInstructions(template: (typeof REPORT_TEMPLATES)[ReportTemplate],
     'When no fresh item is found, distinguish among: No recent change found, Stale source only, Insufficient public evidence, and Needs manual verification.',
     'Make the report easy to read: use concise headings, short paragraphs, bullets, and tables where helpful.',
     'Do not invent facts, ratings, metrics, documents, or conclusions not supported by the package.',
+    'Every analytical statement should be traceable to a visible source name, document, page if supplied, section, or diagnostic record. If no direct evidence is supplied, write "Evidence missing" or move it to Missing Information.',
     'Separate facts, inferences, and recommendations.',
     'If the package says core finance documents are missing, clearly state that the output is preliminary and not a credit conclusion.',
     'Use Tier 1 and Tier 2 sources for conclusions; Tier 3 can provide technical context; Tier 4 should only be mentioned as low-priority context.',
@@ -696,6 +698,7 @@ export async function POST(request: Request) {
   }
 
   const content = responseText(payload);
+  const evidenceEngine = buildEvidenceEngine(record, content || '');
 
   return NextResponse.json({
     report: {
@@ -710,6 +713,8 @@ export async function POST(request: Request) {
       model: payload.model || model,
       usage: payload.usage ?? null,
       sectionTitle: sectionTitle || null,
+      evidenceEngine,
+      evidenceCoverageScore: evidenceEngine.coveragePercent,
     },
   });
 }
