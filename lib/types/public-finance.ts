@@ -99,6 +99,9 @@ export type ResearchRecord = {
   workflowInput?: Record<string, unknown>;
   workflowOptions?: Record<string, boolean>;
   evidencePackage?: Record<string, unknown>;
+  documentDiagnostics?: Record<string, unknown>;
+  retrievalDiagnostics?: Record<string, unknown>;
+  failureClassification?: Record<string, unknown>;
   searchResults?: Array<Record<string, unknown>>;
   documentInventory?: Array<Record<string, unknown>>;
   coverageDashboard?: Array<Record<string, unknown>>;

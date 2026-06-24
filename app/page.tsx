@@ -67,6 +67,20 @@ function defaultRunStatus(record: Partial<ResearchRecord> | null | undefined) {
   return 'Draft';
 }
 
+function researchErrorMessage(payload: any) {
+  const failure = payload?.failureClassification;
+
+  if (failure?.title) {
+    return [
+      failure.title,
+      failure.reason ? `Reason: ${failure.reason}` : null,
+      failure.recommendation ? `Recommendation: ${failure.recommendation}` : null,
+    ].filter(Boolean).join(' ');
+  }
+
+  return payload?.error || 'Live research failed.';
+}
+
 function readingKey(item: Partial<ReadingDocument> | null | undefined) {
   return item?.recordId || item?.id || 'reading-room';
 }
@@ -228,7 +242,7 @@ export default function HomePage() {
 
       if (!researchRes.ok) {
         const errorPayload = await researchRes.json().catch(() => ({}));
-        throw new Error(errorPayload.error || 'Live research failed.');
+        throw new Error(researchErrorMessage(errorPayload));
       }
 
       const researchPayload = await researchRes.json();

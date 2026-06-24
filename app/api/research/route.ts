@@ -16,6 +16,14 @@ import {
   parseUniversalSearchQuery,
   universalSearchContextLines,
 } from '../../../lib/universal-search';
+import {
+  buildDocumentDiagnostics,
+  buildRetrievalDiagnostics,
+  classifyResearchFailure,
+  type DocumentDiagnostics,
+  type FailureClassification,
+  type RetrievalDiagnostics,
+} from '../../../lib/research-diagnostics';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
@@ -830,6 +838,9 @@ function buildEvidencePackage({
   searchResults,
   issuerProfile,
   universalSearch,
+  documentDiagnostics,
+  retrievalDiagnostics,
+  failureClassification,
 }: {
   issuer: string;
   modeLabel: string;
@@ -840,6 +851,9 @@ function buildEvidencePackage({
   searchResults: SonarSearchResult[];
   issuerProfile?: Record<string, unknown> | null;
   universalSearch?: unknown;
+  documentDiagnostics?: DocumentDiagnostics | null;
+  retrievalDiagnostics?: RetrievalDiagnostics | null;
+  failureClassification?: FailureClassification | null;
 }) {
   const coverage = buildCoverageDashboardObject(searchResults);
 
@@ -870,6 +884,9 @@ function buildEvidencePackage({
     },
     issuer_profile_context: issuerProfile ?? null,
     universal_search: universalSearch ?? null,
+    document_diagnostics: documentDiagnostics ?? null,
+    retrieval_diagnostics: retrievalDiagnostics ?? null,
+    failure_classification: failureClassification ?? null,
     search_queries_used: searchQueries,
     document_inventory: buildDocumentInventory(searchResults).map((item) => ({
       title: item.document,
@@ -1087,6 +1104,22 @@ async function searchPerplexity(apiKey: string, query: string) {
   }));
 }
 
+function cachedDocumentCount(issuerProfile: Record<string, unknown> | null) {
+  if (!issuerProfile) return 0;
+  const sourceTrail = Array.isArray(issuerProfile.sourceTrail) ? issuerProfile.sourceTrail.length : 0;
+  const knownDocs = [
+    issuerProfile.latestOS,
+    issuerProfile.latestACFR,
+    issuerProfile.latestEmmaFiling,
+    issuerProfile.latestRatingReport,
+    issuerProfile.latestBudget,
+    issuerProfile.boardPage,
+    issuerProfile.emmaLink,
+  ].filter(Boolean).length;
+
+  return sourceTrail + knownDocs;
+}
+
 function apiErrorMessage(payload: any, status: number) {
   if (payload?.error?.message) {
     return payload.error.message;
@@ -1116,9 +1149,13 @@ export async function POST(request: Request) {
   const apiKey = getPerplexityApiKey();
 
   if (!apiKey) {
+    const message = perplexityApiKeyErrorMessage();
+    const failureClassification = classifyResearchFailure({ apiError: message });
+
     return NextResponse.json(
       {
-        error: perplexityApiKeyErrorMessage(),
+        error: failureClassification?.title || message,
+        failureClassification,
       },
       { status: 500 }
     );
@@ -1172,6 +1209,14 @@ export async function POST(request: Request) {
     recencyScope
   );
   const coreFinanceDocumentsFound = hasCoreFinanceDocuments(classifiedSearchApiResults);
+  const preliminaryDocumentDiagnostics = buildDocumentDiagnostics(researchSubject, classifiedSearchApiResults);
+  const preliminaryRetrievalDiagnostics = buildRetrievalDiagnostics({
+    issuer: researchSubject,
+    sources: classifiedSearchApiResults,
+    searchQueries,
+    cachedDocumentCount: cachedDocumentCount(issuerProfile),
+    liveDocumentCount: classifiedSearchApiResults.length,
+  });
 
   const prompt = [
     'You are Civic Ledger, a public-finance research assistant.',
@@ -1248,9 +1293,19 @@ export async function POST(request: Request) {
   const payload = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    const error = apiErrorMessage(payload, res.status);
+    const failureClassification = classifyResearchFailure({
+      documentDiagnostics: preliminaryDocumentDiagnostics,
+      retrievalDiagnostics: preliminaryRetrievalDiagnostics,
+      apiError: error,
+    });
+
     return NextResponse.json(
       {
-        error: apiErrorMessage(payload, res.status),
+        error: failureClassification?.title || error,
+        failureClassification,
+        documentDiagnostics: preliminaryDocumentDiagnostics,
+        retrievalDiagnostics: preliminaryRetrievalDiagnostics,
       },
       { status: res.status }
     );
@@ -1263,6 +1318,18 @@ export async function POST(request: Request) {
     classifiedSearchApiResults
   ), financeFocused, recencyScope);
   const finalCoreFinanceDocumentsFound = hasCoreFinanceDocuments(searchResults);
+  const documentDiagnostics = buildDocumentDiagnostics(researchSubject, searchResults);
+  const retrievalDiagnostics = buildRetrievalDiagnostics({
+    issuer: researchSubject,
+    sources: searchResults,
+    searchQueries,
+    cachedDocumentCount: cachedDocumentCount(issuerProfile),
+    liveDocumentCount: searchResults.length,
+  });
+  const failureClassification = classifyResearchFailure({
+    documentDiagnostics,
+    retrievalDiagnostics,
+  });
   const citations = mergeSearchResults(
     (sonar.citations ?? []).map((url) => ({ url })),
     searchResults
@@ -1276,7 +1343,7 @@ export async function POST(request: Request) {
     financeFocused
       ? finalCoreFinanceDocumentsFound
         ? 'Core finance documents were found in this search run.'
-        : 'Core finance documents were not found in this search run; treat the memo as preliminary.'
+        : (failureClassification?.title || 'Core finance documents were not found in this search run; treat the memo as preliminary.')
       : 'General research mode.',
     ...sourceFacts(searchResults),
   ];
@@ -1290,6 +1357,9 @@ export async function POST(request: Request) {
     searchResults,
     issuerProfile,
     universalSearch,
+    documentDiagnostics,
+    retrievalDiagnostics,
+    failureClassification,
   });
 
   return NextResponse.json({
@@ -1337,6 +1407,9 @@ export async function POST(request: Request) {
       workflowOptions,
       outputType,
       evidencePackage,
+      documentDiagnostics,
+      retrievalDiagnostics,
+      failureClassification,
       promptMode,
       researchModeLabel: mode.label,
       customAngle,

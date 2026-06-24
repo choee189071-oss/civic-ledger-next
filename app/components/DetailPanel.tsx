@@ -2,6 +2,12 @@
 
 import { useState } from 'react';
 import { FormattedReport } from './FormattedReport';
+import {
+  buildDocumentDiagnostics,
+  buildRetrievalDiagnostics,
+  classifyResearchFailure,
+  sourceCandidatesFromRecord,
+} from '../../lib/research-diagnostics';
 
 type Props = {
   detail: any;
@@ -441,6 +447,28 @@ function recentResearchFor(detail: any, generatedReport: any | null, input: any,
   return items.slice(0, 3) as Array<{ title: string; meta: string }>;
 }
 
+function documentDiagnosticsFor(detail: any, evidencePackage: any) {
+  return detail.documentDiagnostics ||
+    evidencePackage?.document_diagnostics ||
+    buildDocumentDiagnostics(detail.title, sourceCandidatesFromRecord(detail));
+}
+
+function retrievalDiagnosticsFor(detail: any, evidencePackage: any) {
+  return detail.retrievalDiagnostics ||
+    evidencePackage?.retrieval_diagnostics ||
+    buildRetrievalDiagnostics({
+      issuer: detail.title,
+      sources: sourceCandidatesFromRecord(detail),
+      searchQueries: detail.searchQueries ?? evidencePackage?.search_queries_used ?? [],
+    });
+}
+
+function failureClassificationFor(detail: any, evidencePackage: any, documentDiagnostics: any, retrievalDiagnostics: any) {
+  return detail.failureClassification ||
+    evidencePackage?.failure_classification ||
+    classifyResearchFailure({ documentDiagnostics, retrievalDiagnostics });
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
@@ -484,6 +512,9 @@ export function DetailPanel({
   const evidencePackage = evidencePackageFor(detail);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
+  const documentDiagnostics = documentDiagnosticsFor(detail, evidencePackage);
+  const retrievalDiagnostics = retrievalDiagnosticsFor(detail, evidencePackage);
+  const failureClassification = failureClassificationFor(detail, evidencePackage, documentDiagnostics, retrievalDiagnostics);
   const coverageRows = normalizeCoverageRows(evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? []);
   const coverageFoundCount = coverageRows.filter(coverageStatusIsFound).length;
   const coverageTotal = coverageRows.length;
@@ -735,6 +766,93 @@ export function DetailPanel({
                 <strong>{needsReviewCount}</strong>
                 <p>Candidate, missing, or manual items.</p>
               </div>
+            </div>
+          </section>
+
+          {failureClassification && (
+            <section className={`diagnostic-alert ${failureClassification.severity || 'warning'}`}>
+              <div>
+                <p className="eyebrow">Failure classification</p>
+                <h3>{failureClassification.title}</h3>
+                <p>{failureClassification.reason}</p>
+              </div>
+              <strong>{failureClassification.recommendation}</strong>
+            </section>
+          )}
+
+          <section className="answer-section diagnostics-section">
+            <div className="section-heading">
+              <div>
+                <h3>Document inventory diagnostics</h3>
+                <p className="muted small">Required core documents for issuer-level public finance research.</p>
+              </div>
+              <span className={`status-pill ${documentDiagnostics.missingDocuments.length > 0 ? 'warning' : 'ready'}`}>
+                {documentDiagnostics.coveragePercent}% coverage
+              </span>
+            </div>
+            <div className="diagnostic-metric-grid">
+              <div>
+                <span>Coverage</span>
+                <strong>{documentDiagnostics.coveragePercent}%</strong>
+              </div>
+              <div>
+                <span>Missing Documents</span>
+                <strong>{documentDiagnostics.missingDocuments.length}</strong>
+              </div>
+              <div>
+                <span>Document Count</span>
+                <strong>{documentDiagnostics.documentCount}</strong>
+              </div>
+            </div>
+            <div className="document-diagnostic-grid">
+              {documentDiagnostics.documents.map((document: any) => (
+                <article key={document.key} className={`document-diagnostic-card ${document.status}`}>
+                  <div className="document-diagnostic-head">
+                    <span className={`doc-check ${document.status}`}>
+                      {document.status === 'found' ? '✓' : '×'}
+                    </span>
+                    <div>
+                      <h4>{document.label}</h4>
+                      <p>{document.status === 'found' ? document.sourceTitle : document.reason}</p>
+                    </div>
+                  </div>
+                  <div className="document-diagnostic-meta">
+                    <span>{document.date || 'No date'}</span>
+                    <span>{document.sourceTier || (document.status === 'found' ? 'Unclassified' : 'Missing')}</span>
+                  </div>
+                  {document.status === 'missing' && (
+                    <p className="retry-query">Retry: {document.retryQuery}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="answer-section diagnostics-section">
+            <div className="section-heading">
+              <div>
+                <h3>Retrieval diagnostics</h3>
+                <p className="muted small">Where the research run searched, what succeeded, and how to retry failures.</p>
+              </div>
+              <span className={`status-pill ${retrievalDiagnostics.failureCount > 0 ? 'warning' : 'ready'}`}>
+                {retrievalDiagnostics.successCount} success / {retrievalDiagnostics.failureCount} failure
+              </span>
+            </div>
+            <div className="mini-table retrieval-diagnostics-table">
+              <div className="mini-table-row header">
+                <span>Target</span>
+                <span>Status</span>
+                <span>Reason</span>
+                <span>Retry Query</span>
+              </div>
+              {retrievalDiagnostics.items.map((item: any) => (
+                <div key={item.key} className="mini-table-row">
+                  <span>{item.label}</span>
+                  <span className={`retrieval-status ${item.status.toLowerCase()}`}>{item.status}</span>
+                  <span>{item.reason}</span>
+                  <span className="retry-query">{item.retryQuery}</span>
+                </div>
+              ))}
             </div>
           </section>
 
