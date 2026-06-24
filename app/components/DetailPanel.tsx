@@ -379,6 +379,53 @@ function sourceQualityReason(source: any, sourceStatuses: Record<string, string>
   return 'Candidate source pending analyst review.';
 }
 
+function formatEntryDate(value: any) {
+  if (!value) return '';
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) return String(value);
+  return date.toLocaleDateString();
+}
+
+function coverageStatusIsFound(row: any) {
+  return /found|available|complete|verified|used/i.test(`${row?.status ?? ''} ${row?.confidence ?? ''}`);
+}
+
+function entryDocumentTitle(source: any) {
+  return source.title || source.document || source.url || 'Document candidate';
+}
+
+function entryDocumentMeta(source: any) {
+  return [
+    source.documentType || source.type,
+    source.source || source.sourceTier,
+    source.publicationDate || source.date || source.recencyWindow,
+  ].filter(Boolean).join(' / ') || 'Metadata pending';
+}
+
+function recentResearchFor(detail: any, generatedReport: any | null, input: any, reportTemplate: string) {
+  const items = [
+    generatedReport ? {
+      title: generatedReport.templateLabel || templateLabel(reportTemplate),
+      meta: `Draft generated ${formatEntryDate(generatedReport.generatedAt) || 'today'}`,
+    } : null,
+    detail.generatedAt ? {
+      title: detail.researchModeLabel || detail.topic || 'Research run',
+      meta: `Last updated ${formatEntryDate(detail.generatedAt)}`,
+    } : null,
+    detail.evidenceQualitySummary ? {
+      title: 'Evidence note',
+      meta: detail.evidenceQualitySummary,
+    } : null,
+    detail.summary ? {
+      title: input.output_type || templateLabel(reportTemplate),
+      meta: detail.summary,
+    } : null,
+  ].filter(Boolean);
+
+  return items.slice(0, 3) as Array<{ title: string; meta: string }>;
+}
+
 export function DetailPanel({
   detail,
   reportTemplate,
@@ -422,6 +469,19 @@ export function DetailPanel({
   const evidencePackage = evidencePackageFor(detail);
   const evidenceQuality = evidenceQualitySummary(detail, evidencePackage, sourceStatuses);
   const evidenceSources = allSourceCandidates(detail, evidencePackage).slice(0, 12);
+  const coverageRows = evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? [];
+  const coverageFoundCount = coverageRows.filter(coverageStatusIsFound).length;
+  const coverageTotal = coverageRows.length;
+  const coveragePercent = coverageTotal > 0 ? Math.round((coverageFoundCount / coverageTotal) * 100) : 0;
+  const missingCoverageAreas = coverageRows
+    .filter((row: any) => !coverageStatusIsFound(row))
+    .slice(0, 2)
+    .map((row: any) => row.area || row.document || row.title)
+    .filter(Boolean);
+  const recentDocuments = allSourceCandidates(detail, evidencePackage)
+    .filter((source) => entryDocumentTitle(source))
+    .slice(0, 3);
+  const recentResearch = recentResearchFor(detail, generatedReport, input, reportTemplate);
   const primarySourceCount = Object.entries(evidenceQuality.tierCounts)
     .filter(([key]) => /tier\s*[12]|high/i.test(key))
     .reduce((total, [, value]) => total + value, 0);
@@ -536,21 +596,84 @@ export function DetailPanel({
         </label>
       </div>
 
-      <div className="answer-summary">
-        <p>{detail.summary}</p>
-      </div>
+      <section className="issuer-entry-panel">
+        <div className="issuer-entry-summary">
+          <p className="eyebrow">Issuer workspace</p>
+          <h3>{detail.title}</h3>
+          <p>{detail.summary}</p>
+          <div className="record-meta issuer-entry-meta">
+            <span>{detail.researchModeLabel ?? detail.topic}</span>
+            <span>{generatedReport?.templateLabel || input.output_type || reportTemplate}</span>
+            <span>{detail.source}</span>
+          </div>
+        </div>
+
+        <div className="issuer-entry-grid">
+          <article className="issuer-entry-card coverage-card">
+            <div>
+              <span>Coverage</span>
+              <strong>{coverageTotal > 0 ? `${coveragePercent}%` : 'Not started'}</strong>
+            </div>
+            <div className="coverage-meter" aria-label="Coverage progress">
+              <span style={{ width: `${coveragePercent}%` }} />
+            </div>
+            <p>
+              {coverageTotal > 0
+                ? `${coverageFoundCount} of ${coverageTotal} evidence areas have usable support.`
+                : 'Run search or upload documents to build the issuer evidence map.'}
+            </p>
+            {missingCoverageAreas.length > 0 && (
+              <p className="issuer-entry-note">Needs: {missingCoverageAreas.join(', ')}</p>
+            )}
+          </article>
+
+          <article className="issuer-entry-card">
+            <span>Recent Documents</span>
+            <div className="entry-list">
+              {recentDocuments.length === 0 && (
+                <p className="issuer-entry-note">No documents attached yet.</p>
+              )}
+              {recentDocuments.map((source, index) => (
+                <div key={`${sourceKey(source) || entryDocumentTitle(source)}-${index}`} className="entry-list-item">
+                  <strong>{entryDocumentTitle(source)}</strong>
+                  <p>{entryDocumentMeta(source)}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="issuer-entry-card">
+            <span>Recent Research</span>
+            <div className="entry-list">
+              {recentResearch.length === 0 && (
+                <p className="issuer-entry-note">No prior research run is saved for this issuer.</p>
+              )}
+              {recentResearch.map((item, index) => (
+                <div key={`${item.title}-${index}`} className="entry-list-item">
+                  <strong>{item.title}</strong>
+                  <p>{item.meta}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="issuer-entry-card quick-actions-card">
+            <span>Quick Actions</span>
+            <div className="quick-actions-stack">
+              <button className="button-primary" onClick={() => setActiveTab('discovery')}>Review Evidence</button>
+              <button className="button-secondary" onClick={() => setActiveTab('report')}>Draft Report</button>
+              <button className="button-secondary" onClick={onOpenReading}>Open Editor</button>
+              <button className="button-secondary" onClick={onSave}>{isSaved ? 'Saved to Library' : 'Save Workspace'}</button>
+            </div>
+          </article>
+        </div>
+      </section>
 
       {detail.financeFocused && detail.coreFinanceDocumentsFound === false && (
         <div className="warning-banner">
           Core finance documents were not found in this search run. The memo is a preliminary issuer overview, not a credit conclusion.
         </div>
       )}
-
-      <div className="record-meta">
-        <span>{detail.researchModeLabel ?? detail.topic}</span>
-        <span>{generatedReport?.templateLabel || input.output_type || reportTemplate}</span>
-        <span>{detail.source}</span>
-      </div>
 
       <div className="workflow-tabs">
         {workflowTabs.map(([id, label]) => (
