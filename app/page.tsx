@@ -219,6 +219,7 @@ function screenFocus(view: string) {
 export default function HomePage() {
   const [view, setView] = useState('search');
   const [sourceManagementTab, setSourceManagementTab] = useState<SourceManagementTab>('documents');
+  const [intakeCollapsed, setIntakeCollapsed] = useState(false);
   const [query, setQuery] = useState('LADWP');
   const [promptMode, setPromptMode] = useState('issuer-credit-profile');
   const [customAngle, setCustomAngle] = useState('');
@@ -1102,7 +1103,7 @@ export default function HomePage() {
         </header>
 
         {view === 'search' && (
-          <section className="workspace-grid">
+          <section className={`workspace-grid ${intakeCollapsed ? 'intake-collapsed' : ''}`}>
             <SearchPanel
               query={query}
               topic={topic}
@@ -1128,6 +1129,8 @@ export default function HomePage() {
               onTab={setTab}
               isResearching={isResearching}
               researchError={researchError}
+              collapsed={intakeCollapsed}
+              onToggleCollapse={() => setIntakeCollapsed((collapsed) => !collapsed)}
             />
             <DetailPanel
               detail={detail}

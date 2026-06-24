@@ -58,6 +58,8 @@ type Props = {
   onTab: (v: string) => void;
   isResearching: boolean;
   researchError: string | null;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 };
 
 const promptModes = [
@@ -290,6 +292,36 @@ export function SearchPanel(props: Props) {
     )
   ];
 
+  if (props.collapsed) {
+    return (
+      <section className="workspace-panel query-panel query-panel-collapsed" aria-label="Research intake collapsed">
+        <button
+          className="intake-resize-button"
+          type="button"
+          aria-label="Expand research intake"
+          title="Expand research intake"
+          onClick={props.onToggleCollapse}
+        >
+          ⇥
+        </button>
+        <div className="collapsed-intake-summary">
+          <span className="eyebrow">Ask</span>
+          <strong>{props.query || 'Search'}</strong>
+          <em>{props.items.length} results</em>
+        </div>
+        <button
+          className="icon-button primary collapsed-search-button"
+          aria-label="Run research search"
+          type="button"
+          disabled={props.isResearching}
+          onClick={() => props.onSearch()}
+        >
+          {props.isResearching ? '…' : '⌕'}
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className="workspace-panel query-panel">
       <div className="panel-heading">
@@ -297,7 +329,18 @@ export function SearchPanel(props: Props) {
           <p className="eyebrow">Ask</p>
           <h2>Research intake</h2>
         </div>
-        <span className="count">{props.items.length}</span>
+        <div className="panel-heading-actions">
+          <button
+            className="intake-resize-button"
+            type="button"
+            aria-label="Collapse research intake"
+            title="Collapse research intake"
+            onClick={props.onToggleCollapse}
+          >
+            ⇤
+          </button>
+          <span className="count">{props.items.length}</span>
+        </div>
       </div>
 
       <div className="searchbox">
