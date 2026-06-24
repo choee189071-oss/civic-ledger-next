@@ -10,6 +10,16 @@ import { ResearchLibraryPanel } from './components/ResearchLibraryPanel';
 import { IssuerDevelopmentsPanel } from './components/IssuerDevelopmentsPanel';
 import { IssuerProfilesPanel } from './components/IssuerProfilesPanel';
 import { WorkflowCenterPanel } from './components/WorkflowCenterPanel';
+import type {
+  GeneratedReport,
+  IssuerProfile,
+  ReadingAnnotation,
+  ReadingDocument,
+  ReportVersion,
+  ResearchRecord,
+  SourceCatalogItem,
+  SourceStatusMap,
+} from '../lib/types/public-finance';
 
 const defaultWorkflowOptions = {
   includeLiveSearch: true,
@@ -22,11 +32,14 @@ const defaultWorkflowOptions = {
   includeExport: true,
 };
 
-function normalizeRecord(item: any) {
+function normalizeRecord(item: Partial<ResearchRecord> & Record<string, unknown>): ResearchRecord {
   return {
     ...item,
     score: item.score ?? 82,
-    summary: item.summary ?? item.snippet ?? item.title,
+    title: item.title ?? 'Untitled research record',
+    topic: item.topic ?? 'Research',
+    source: item.source ?? 'Civic Ledger',
+    summary: item.summary ?? item.snippet ?? item.title ?? 'No summary available.',
     snippet: item.snippet ?? item.summary ?? '',
     facts: item.facts ?? [
       item.program && `Program: ${item.program}`,
@@ -38,16 +51,16 @@ function normalizeRecord(item: any) {
     citations: item.citations ?? [
       item.source === 'Open FI$Cal' ? 'https://open.fiscal.ca.gov' : item.source,
     ].filter(Boolean),
-  };
+  } as ResearchRecord;
 }
 
-function defaultRunStatus(record: any) {
+function defaultRunStatus(record: Partial<ResearchRecord> | null | undefined) {
   if (record?.workflowStatus) return record.workflowStatus;
   if (record?.financeFocused && record?.coreFinanceDocumentsFound === false) return 'Needs Sources';
   return 'Draft';
 }
 
-function readingKey(item: any) {
+function readingKey(item: Partial<ReadingDocument> | null | undefined) {
   return item?.recordId || item?.id || 'reading-room';
 }
 
@@ -92,18 +105,18 @@ export default function HomePage() {
   const [tab, setTab] = useState('results');
   const [reportTemplate, setReportTemplate] = useState('credit-memo');
   const [workflowOptions, setWorkflowOptions] = useState<Record<string, boolean>>(defaultWorkflowOptions);
-  const [results, setResults] = useState<any[]>([]);
-  const [sources, setSources] = useState<any[]>([]);
+  const [results, setResults] = useState<ResearchRecord[]>([]);
+  const [sources, setSources] = useState<SourceCatalogItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<any | null>(null);
-  const [generatedReport, setGeneratedReport] = useState<any | null>(null);
-  const [reading, setReading] = useState<any | null>(null);
-  const [savedRecords, setSavedRecords] = useState<any[]>([]);
+  const [detail, setDetail] = useState<ResearchRecord | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
+  const [reading, setReading] = useState<ReadingDocument | null>(null);
+  const [savedRecords, setSavedRecords] = useState<ResearchRecord[]>([]);
   const [runStatuses, setRunStatuses] = useState<Record<string, string>>({});
-  const [sourceStatuses, setSourceStatuses] = useState<Record<string, string>>({});
-  const [issuerProfiles, setIssuerProfiles] = useState<Record<string, any>>({});
-  const [reportVersions, setReportVersions] = useState<Record<string, any[]>>({});
-  const [readingAnnotations, setReadingAnnotations] = useState<Record<string, any[]>>({});
+  const [sourceStatuses, setSourceStatuses] = useState<SourceStatusMap>({});
+  const [issuerProfiles, setIssuerProfiles] = useState<Record<string, IssuerProfile>>({});
+  const [reportVersions, setReportVersions] = useState<Record<string, ReportVersion[]>>({});
+  const [readingAnnotations, setReadingAnnotations] = useState<Record<string, ReadingAnnotation[]>>({});
   const [storageReady, setStorageReady] = useState(false);
   const [isResearching, setIsResearching] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
@@ -218,9 +231,9 @@ export default function HomePage() {
         workflowStatus: defaultRunStatus(researchPayload.record),
       };
       setGeneratedReport(null);
-      const nextResults = [
+      const nextResults: ResearchRecord[] = [
         researchRecord,
-        ...searchItems.filter((item: any) => item.id !== researchRecord.id),
+        ...searchItems.filter((item: ResearchRecord) => item.id !== researchRecord.id),
       ].slice(0, 12);
 
       setResults(nextResults);
@@ -259,7 +272,7 @@ export default function HomePage() {
       const report = payload.report;
       setGeneratedReport(report);
       setRunStatuses((statuses) => ({ ...statuses, [detail.id]: 'Ready for Review' }));
-      setDetail((current: any) => current ? { ...current, generatedReport: report, workflowStatus: 'Ready for Review' } : current);
+      setDetail((current) => current ? { ...current, generatedReport: report, workflowStatus: 'Ready for Review' } : current);
       setResults((items) =>
         items.map((item) => item.id === detail.id ? { ...item, generatedReport: report, workflowStatus: 'Ready for Review' } : item)
       );
@@ -285,7 +298,7 @@ export default function HomePage() {
     if (!detail) return;
 
     setRunStatuses((statuses) => ({ ...statuses, [detail.id]: status }));
-    setDetail((current: any) => current ? { ...current, workflowStatus: status } : current);
+    setDetail((current) => current ? { ...current, workflowStatus: status } : current);
     setResults((items) => items.map((item) => item.id === detail.id ? { ...item, workflowStatus: status } : item));
     setSavedRecords((records) => {
       const next = records.map((record) => record.id === detail.id ? { ...record, workflowStatus: status } : record);
@@ -299,7 +312,7 @@ export default function HomePage() {
     setSourceStatuses((statuses) => ({ ...statuses, [key]: status }));
   }
 
-  function saveIssuerProfile(profile: any) {
+  function saveIssuerProfile(profile: IssuerProfile) {
     if (!profile?.issuer) return;
     setIssuerProfiles((profiles) => ({
       ...profiles,
@@ -312,7 +325,7 @@ export default function HomePage() {
 
     const nextReport = { ...generatedReport, content, editedAt: new Date().toISOString() };
     setGeneratedReport(nextReport);
-    setDetail((current: any) => current ? { ...current, generatedReport: nextReport } : current);
+    setDetail((current) => current ? { ...current, generatedReport: nextReport } : current);
     setResults((items) => items.map((item) => item.id === detail?.id ? { ...item, generatedReport: nextReport } : item));
   }
 
@@ -378,14 +391,14 @@ export default function HomePage() {
   }
 
   function updateReadingContent(content: string) {
-    setReading((current: any) => current ? { ...current, body: [content], editedAt: new Date().toISOString() } : current);
+    setReading((current) => current ? { ...current, body: [content], editedAt: new Date().toISOString() } : current);
 
     if (generatedReport && reading?.id === generatedReport.id) {
       updateReportContent(content);
     }
   }
 
-  function addReadingAnnotation(annotation: any) {
+  function addReadingAnnotation(annotation: ReadingAnnotation) {
     if (!reading) return;
     const key = readingKey(reading);
     setReadingAnnotations((items) => ({
@@ -410,14 +423,14 @@ export default function HomePage() {
     }));
     setSavedRecords((records) => {
       const next = records.map((record) => record.id === key
-        ? { ...record, annotations: (record.annotations ?? []).filter((annotation: any) => annotation.id !== annotationId) }
+        ? { ...record, annotations: (record.annotations ?? []).filter((annotation) => annotation.id !== annotationId) }
         : record);
       window.localStorage.setItem('civic-ledger-saved-records', JSON.stringify(next));
       return next;
     });
   }
 
-  function openLibraryRecord(record: any) {
+  function openLibraryRecord(record: ResearchRecord) {
     const normalized = normalizeRecord(record);
     setDetail(normalized);
     setSelectedId(normalized.id);
@@ -429,7 +442,7 @@ export default function HomePage() {
     setView('search');
   }
 
-  function openLibraryReading(record: any) {
+  function openLibraryReading(record: ResearchRecord) {
     const report = record.generatedReport;
     const key = record.id;
 

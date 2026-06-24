@@ -1,28 +1,22 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import type { IssuerProfile, ResearchRecord } from '../../lib/types/public-finance';
 
-type IssuerProfile = {
-  issuer: string;
-  legalName: string;
-  sector: string;
-  state: string;
-  rating: string;
-  outstandingDebt: string;
-  latestOS: string;
-  latestACFR: string;
-  latestBudget: string;
-  boardPage: string;
-  emmaLink: string;
-  advisorsCounsel: string;
-  lastCheckedDate: string;
-  notes: string;
+type SourceLike = {
+  title?: string;
+  document?: string;
+  documentType?: string;
+  type?: string;
+  document_type?: string;
+  url?: string;
+  source_url?: string;
 };
 
 type Props = {
   profiles: Record<string, IssuerProfile>;
-  savedRecords: any[];
-  currentRecord: any;
+  savedRecords: ResearchRecord[];
+  currentRecord: ResearchRecord | null;
   onSaveProfile: (profile: IssuerProfile) => void;
 };
 
@@ -45,21 +39,21 @@ function profileKey(value: string) {
   return value.trim().toLowerCase();
 }
 
-function sourceUrl(record: any, pattern: RegExp) {
+function sourceUrl(record: Partial<ResearchRecord> | null | undefined, pattern: RegExp) {
   const sources = [
     ...(record?.documentInventory ?? []),
     ...(record?.searchResults ?? []),
-    ...(record?.evidencePackage?.document_inventory ?? []),
-  ];
+    ...((record?.evidencePackage?.document_inventory as SourceLike[] | undefined) ?? []),
+  ] as SourceLike[];
 
-  const match = sources.find((source: any) =>
+  const match = sources.find((source) =>
     pattern.test(`${source.title ?? source.document ?? ''} ${source.documentType ?? source.type ?? source.document_type ?? ''} ${source.url ?? source.source_url ?? ''}`.toLowerCase())
   );
 
   return match?.url ?? match?.source_url ?? '';
 }
 
-function firstRating(record: any) {
+function firstRating(record: Partial<ResearchRecord> | null | undefined) {
   const text = [
     record?.snippet,
     record?.summary,
@@ -69,7 +63,7 @@ function firstRating(record: any) {
   return match?.[0] ?? '';
 }
 
-function buildProfileFromRecord(record: any, existing?: IssuerProfile): IssuerProfile {
+function buildProfileFromRecord(record: Partial<ResearchRecord> | null | undefined, existing?: IssuerProfile): IssuerProfile {
   const title = record?.title || existing?.issuer || 'New issuer';
   return {
     issuer: existing?.issuer || title,
@@ -83,13 +77,13 @@ function buildProfileFromRecord(record: any, existing?: IssuerProfile): IssuerPr
     latestBudget: existing?.latestBudget || sourceUrl(record, /budget|financial plan/),
     boardPage: existing?.boardPage || sourceUrl(record, /board|agenda|minutes|packet/),
     emmaLink: existing?.emmaLink || sourceUrl(record, /emma|msrb|continuing disclosure/),
-    advisorsCounsel: existing?.advisorsCounsel || '',
+    advisorsCounsel: existing?.advisorsCounsel || existing?.knownAdvisors || '',
     lastCheckedDate: new Date().toISOString().slice(0, 10),
     notes: existing?.notes || record?.summary || '',
   };
 }
 
-function savedRecordForIssuer(records: any[], issuer: string) {
+function savedRecordForIssuer(records: ResearchRecord[], issuer: string) {
   const key = profileKey(issuer);
   return records.find((record) => profileKey(record.title || '').includes(key) || key.includes(profileKey(record.title || '')));
 }
@@ -194,7 +188,7 @@ export function IssuerProfilesPanel({ profiles, savedRecords, currentRecord, onS
             <label className="profile-notes">
               Notes
               <textarea
-                value={draft.notes}
+                value={draft.notes ?? ''}
                 onChange={(event) => updateField('notes', event.target.value)}
                 placeholder="Internal research notes, known caveats, relationship history, or monitoring instructions."
                 rows={5}

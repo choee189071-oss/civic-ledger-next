@@ -1,31 +1,8 @@
-export type Source = {
-  id: string;
-  name: string;
-  topic: string;
-  trust: string;
-  freshness: string;
-  description: string;
-  keyFacts: string[];
-};
+import type { ReadingDocument, ResearchRecord, SourceCatalogItem } from './types/public-finance';
 
-export type Result = {
-  id: string;
-  title: string;
-  topic: string;
-  source: string;
-  score: number;
-  freshnessRank: number;
-  summary: string;
-  snippet: string;
-  facts: string[];
-  citations: string[];
-};
-
-export type Reading = {
-  id: string;
-  title: string;
-  body: string[];
-};
+export type Source = SourceCatalogItem;
+export type Result = ResearchRecord;
+export type Reading = ReadingDocument;
 
 export const sources: Source[] = [
   {

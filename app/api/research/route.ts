@@ -45,6 +45,49 @@ type SonarResponse = {
 const SONAR_URL = 'https://api.perplexity.ai/v1/sonar';
 const SEARCH_URL = 'https://api.perplexity.ai/search';
 
+const TIER1_DOMAINS = [
+  'emma.msrb.org',
+  'msrb.org',
+  'ladwp.com',
+  'smud.org',
+  'moodys.com',
+  'fitchratings.com',
+  'krollbondratings.com',
+  'kbra.com',
+  'spglobal.com',
+  'standardandpoors.com',
+];
+
+const TIER2_DOMAINS = [
+  '.gov',
+  'treasurer.ca.gov',
+  'debtwatch.treasurer.ca.gov',
+  'ebudget.ca.gov',
+  'open.fiscal.ca.gov',
+  'data.ca.gov',
+  'bythenumbers.sco.ca.gov',
+  'usaspending.gov',
+  'dof.ca.gov',
+  'cde.ca.gov',
+];
+
+const TIER4_DOMAINS = [
+  'youtube.com',
+  'youtu.be',
+  'linkedin.com',
+  'wikipedia.org',
+  'reddit.com',
+  'facebook.com',
+  'x.com',
+  'twitter.com',
+];
+
+const TIER3_DOMAINS = [
+  'bloomberg.com',
+  'reuters.com',
+  'bondbuyer.com',
+];
+
 const PROMPT_MODE_OPTIONS = {
   'general-overview': {
     label: 'General Overview',
@@ -124,6 +167,23 @@ function sourceLabel(url: string) {
   } catch {
     return url;
   }
+}
+
+function sourceHost(url?: string) {
+  if (!url) return '';
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function hostMatches(host: string, domains: string[]) {
+  return domains.some((domain) => {
+    if (domain.startsWith('.')) return host.endsWith(domain);
+    return host === domain || host.endsWith(`.${domain}`);
+  });
 }
 
 function sourceFacts(searchResults: SonarSearchResult[]) {
@@ -444,6 +504,47 @@ function documentTypeFor(result: SonarSearchResult) {
 function classifySourceTier(result: SonarSearchResult) {
   const text = `${result.title ?? ''} ${result.snippet ?? ''} ${result.url ?? ''}`.toLowerCase();
   const docType = documentTypeFor(result);
+  const host = sourceHost(result.url);
+
+  if (host && hostMatches(host, TIER4_DOMAINS)) {
+    return {
+      rank: 4,
+      tier: 'Tier 4',
+      name: 'Media / low-priority source',
+      documentType: docType,
+      notes: `Domain ${host} is a secondary or social/media source. Do not use for core finance conclusions without Tier 1/2 confirmation.`,
+    };
+  }
+
+  if (host && hostMatches(host, TIER3_DOMAINS)) {
+    return {
+      rank: 3,
+      tier: 'Tier 3',
+      name: 'Professional news / market context',
+      documentType: docType,
+      notes: `Domain ${host} is useful market or news context, but should not replace issuer, EMMA/MSRB, rating, or official government evidence.`,
+    };
+  }
+
+  if (host && hostMatches(host, TIER1_DOMAINS)) {
+    return {
+      rank: 1,
+      tier: 'Tier 1',
+      name: 'Core public finance evidence',
+      documentType: docType,
+      notes: `Domain ${host} is a preferred Tier 1 public-finance, issuer, EMMA/MSRB, or rating source.`,
+    };
+  }
+
+  if (host && hostMatches(host, TIER2_DOMAINS)) {
+    return {
+      rank: 2,
+      tier: 'Tier 2',
+      name: 'Official issuer / government source',
+      documentType: docType,
+      notes: `Domain ${host} is an official government, open-data, or structured public source.`,
+    };
+  }
 
   if (
     /annual comprehensive financial report|\bacfr\b|audited financial|single audit|schedule of expenditures of federal awards|\bsefa\b|official statement|preliminary official statement|\bpos\b|emma|msrb|continuing disclosure|rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra|bondholder|investor relation|revenue bond/.test(text)

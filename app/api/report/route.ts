@@ -369,7 +369,7 @@ function filingEntity(source: any) {
   }
 }
 
-function sourceAppendix(record: any) {
+function sourceAppendix(record: any, limit = 25) {
   const candidates = [
     ...(record?.evidencePackage?.document_inventory ?? []),
     ...(record?.documentInventory ?? []),
@@ -409,10 +409,72 @@ function sourceAppendix(record: any) {
       };
     })
     .filter(Boolean)
-    .slice(0, 25);
+    .slice(0, limit);
 }
 
-function compactRecord(record: any) {
+function tierRank(source: any) {
+  const explicit = Number(source?.sourceTierRank ?? source?.source_tier_rank);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const tier = String(source?.sourceTier ?? source?.source_tier ?? '').toLowerCase();
+  if (tier.includes('tier 1')) return 1;
+  if (tier.includes('tier 2')) return 2;
+  if (tier.includes('tier 3')) return 3;
+  if (tier.includes('tier 4')) return 4;
+  return 5;
+}
+
+function sourceDateValue(source: any) {
+  const raw = firstValue(source, ['date', 'last_updated', 'lastUpdated', 'publication_date', 'publicationDate', 'filing_date', 'filingDate']);
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function sourceIdentity(source: any) {
+  return `${source?.url ?? source?.source_url ?? ''}|${source?.title ?? source?.document ?? source?.document_title ?? ''}`.toLowerCase();
+}
+
+function prioritizedSourceEvidence(record: any, templateKey: ReportTemplate) {
+  const candidates = [
+    ...(record?.searchResults ?? []),
+    ...(record?.documentInventory ?? []),
+    ...(record?.evidencePackage?.document_inventory ?? []),
+  ];
+  const seen = new Set<string>();
+  const unique = candidates.filter((source: any) => {
+    const key = sourceIdentity(source);
+    if (!key || key === '|' || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const highEvidenceTemplates = new Set<ReportTemplate>([
+    'credit-memo',
+    'investment-committee-memo',
+    'rating-committee-memo',
+    'due-diligence-report',
+    'document-inventory-report',
+    'source-appendix',
+    'peer-comparison-table',
+    'time-series-analysis',
+    'covenant-tracking',
+  ]);
+  const limit = highEvidenceTemplates.has(templateKey) ? 50 : 22;
+  const tierOne = unique.filter((source) => tierRank(source) === 1);
+  const remaining = unique
+    .filter((source) => tierRank(source) !== 1)
+    .sort((a, b) => {
+      const tierDelta = tierRank(a) - tierRank(b);
+      if (tierDelta !== 0) return tierDelta;
+      return sourceDateValue(b) - sourceDateValue(a);
+    });
+
+  return [...tierOne, ...remaining].slice(0, Math.max(limit, tierOne.length));
+}
+
+function compactRecord(record: any, templateKey: ReportTemplate) {
+  const evidenceSources = prioritizedSourceEvidence(record, templateKey);
+  const appendixLimit = templateKey === 'source-appendix' || templateKey === 'document-inventory-report' ? 60 : 35;
+
   return {
     title: record?.title,
     workflowInput: record?.workflowInput ?? null,
@@ -426,16 +488,22 @@ function compactRecord(record: any) {
     citations: record?.citations ?? [],
     coverageDashboard: record?.coverageDashboard ?? [],
     documentInventory: record?.documentInventory ?? [],
-    sourceAppendix: sourceAppendix(record),
-    sourceEvidence: (record?.searchResults ?? []).slice(0, 20).map((result: any) => ({
+    sourceAppendix: sourceAppendix(record, appendixLimit),
+    sourceEvidence: evidenceSources.map((result: any) => ({
       title: result.title,
+      document: result.document,
       url: result.url,
-      date: result.date ?? result.last_updated,
+      source_url: result.source_url,
+      date: result.date ?? result.last_updated ?? result.publication_date,
       snippet: result.snippet,
       sourceTier: result.sourceTier,
+      source_tier: result.source_tier,
+      sourceTierRank: tierRank(result),
       sourceTierName: result.sourceTierName,
       documentType: result.documentType,
+      document_type: result.document_type ?? result.type,
       recencyWindow: result.recencyWindow,
+      recency_window: result.recency_window,
       cusip: extractCusip(result),
       emmaSubmissionId: extractEmmaSubmissionId(result),
       confidenceTier: confidenceTier(result),
@@ -575,7 +643,7 @@ export async function POST(request: Request) {
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-5.5';
-  const packageJson = JSON.stringify(compactRecord(record), null, 2);
+  const packageJson = JSON.stringify(compactRecord(record, templateKey), null, 2);
 
   const res = await fetch(OPENAI_RESPONSES_URL, {
     method: 'POST',
