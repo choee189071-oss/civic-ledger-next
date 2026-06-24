@@ -538,6 +538,53 @@ h3 {
   min-height: calc(100vh - 132px);
 }
 
+.source-management-page {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.source-management-tabs {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.source-management-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-muted);
+  display: grid;
+  gap: 3px;
+  min-height: 62px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.source-management-tabs button strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.source-management-tabs button span {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.source-management-tabs button.active {
+  background: var(--color-page);
+  box-shadow: var(--shadow);
+  color: var(--color-primary-dark);
+}
+
 .workspace-panel,
 .full-page-panel {
   background: var(--color-page);
@@ -3964,6 +4011,7 @@ h3 {
   }
 
   .workflow-tabs,
+  .source-management-tabs,
   .key-value-grid,
   .export-grid,
   .compare-grid,

@@ -52,6 +52,26 @@ const STORAGE_KEYS = {
   favorites: 'civic-ledger-favorites',
 };
 
+const sourceManagementTabs = [
+  {
+    id: 'documents',
+    label: 'Document Intake',
+    description: 'Upload PDFs and turn source files into evidence.',
+  },
+  {
+    id: 'profiles',
+    label: 'Issuer Profiles',
+    description: 'Maintain the persistent issuer file and coverage map.',
+  },
+  {
+    id: 'sources',
+    label: 'Source List',
+    description: 'Review source tier, recency, and verification status.',
+  },
+] as const;
+
+type SourceManagementTab = typeof sourceManagementTabs[number]['id'];
+
 function normalizeRecord(item: Partial<ResearchRecord> & Record<string, unknown>): ResearchRecord {
   return {
     ...item,
@@ -143,13 +163,21 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 function screenFocus(view: string) {
+  const sourceManagementFocus = {
+    eyebrow: 'Source Management',
+    title: 'Which sources can support this analysis?',
+    description: 'Upload core documents, maintain issuer files, and verify source quality in one evidence workspace.',
+    primaryAction: 'Manage Sources',
+    secondaryAction: 'Search Issuer',
+  };
+
   const screens: Record<string, { eyebrow: string; title: string; description: string; primaryAction: string; secondaryAction?: string }> = {
     search: {
       eyebrow: 'Search',
       title: 'Which issuer are we researching?',
       description: 'Start with one issuer, alias, CUSIP, sector, bond type, or natural-language question. The workspace will organize evidence and analysis after the run.',
       primaryAction: 'Run Research',
-      secondaryAction: 'Upload Documents',
+      secondaryAction: 'Source Management',
     },
     developments: {
       eyebrow: 'Dashboard',
@@ -158,20 +186,9 @@ function screenFocus(view: string) {
       primaryAction: 'Open Monitor',
       secondaryAction: 'Search Issuer',
     },
-    documents: {
-      eyebrow: 'Documents',
-      title: 'Which document should become evidence?',
-      description: 'Upload or link one core PDF, then convert it into a source list item, evidence package, memo draft, and reading-room document.',
-      primaryAction: 'Upload PDF',
-      secondaryAction: 'Search Issuer',
-    },
-    profiles: {
-      eyebrow: 'Analysis',
-      title: 'What do we know about this issuer?',
-      description: 'Review the issuer profile, core document coverage, ratings, debt notes, and persistent source links.',
-      primaryAction: 'Review Profile',
-      secondaryAction: 'Search Issuer',
-    },
+    'source-management': sourceManagementFocus,
+    documents: sourceManagementFocus,
+    profiles: sourceManagementFocus,
     library: {
       eyebrow: 'Reports',
       title: 'Which workspace should continue?',
@@ -179,13 +196,7 @@ function screenFocus(view: string) {
       primaryAction: 'Open Saved Work',
       secondaryAction: 'Search Issuer',
     },
-    sources: {
-      eyebrow: 'Settings',
-      title: 'Which evidence can be trusted?',
-      description: 'Review source status, source tier, extraction options, and verification decisions for the active research run.',
-      primaryAction: 'Review Sources',
-      secondaryAction: 'Search Issuer',
-    },
+    sources: sourceManagementFocus,
     reading: {
       eyebrow: 'Editor',
       title: 'What report text needs review?',
@@ -207,6 +218,7 @@ function screenFocus(view: string) {
 
 export default function HomePage() {
   const [view, setView] = useState('search');
+  const [sourceManagementTab, setSourceManagementTab] = useState<SourceManagementTab>('documents');
   const [query, setQuery] = useState('LADWP');
   const [promptMode, setPromptMode] = useState('issuer-credit-profile');
   const [customAngle, setCustomAngle] = useState('');
@@ -296,6 +308,20 @@ export default function HomePage() {
     const payload = await res.json();
     setReading(payload);
     setView('reading');
+  }
+
+  function openSourceManagement(tab: SourceManagementTab = 'documents') {
+    setSourceManagementTab(tab);
+    setView('source-management');
+  }
+
+  function navigateWorkspace(nextView: string) {
+    if (nextView === 'documents' || nextView === 'profiles' || nextView === 'sources') {
+      openSourceManagement(nextView);
+      return;
+    }
+
+    setView(nextView);
   }
 
   function touchRecentWorkspace(record: ResearchRecord, subtitle?: string) {
@@ -995,6 +1021,7 @@ export default function HomePage() {
   const activeDocumentPinned = Boolean(detail && isFavorite('document', activeDocumentTitle, detail.id));
   const isBusy = isResearching || isGeneratingReport;
   const focus = screenFocus(view);
+  const isSourceManagementView = view === 'source-management' || view === 'documents' || view === 'profiles' || view === 'sources';
 
   return (
     <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
@@ -1006,8 +1033,8 @@ export default function HomePage() {
         </div>
       )}
       <Sidebar
-        current={view}
-        onChange={setView}
+        current={isSourceManagementView ? 'source-management' : view}
+        onChange={navigateWorkspace}
         savedRecords={savedRecords}
         recentWorkspaces={recentWorkspaces}
         favorites={favorites}
@@ -1041,7 +1068,7 @@ export default function HomePage() {
                 </button>
               )}
               {view === 'search' && (
-                <button className="button-secondary" onClick={() => setView('documents')}>{focus.secondaryAction}</button>
+                <button className="button-secondary" onClick={() => openSourceManagement('documents')}>{focus.secondaryAction}</button>
               )}
               {view === 'reading' && (
                 <button className="button-primary" onClick={() => setView('library')}>{focus.secondaryAction}</button>
@@ -1175,29 +1202,49 @@ export default function HomePage() {
             onRunWorkflow={startWorkflowRun}
           />
         )}
-        {view === 'profiles' && (
-          <IssuerProfilesPanel
-            profiles={issuerProfiles}
-            savedRecords={savedRecords}
-            currentRecord={detail}
-            onSaveProfile={saveIssuerProfile}
-          />
-        )}
-        {view === 'documents' && (
-          <DocumentIntakePanel
-            onOpenReading={openParsedDocumentReading}
-            onWorkflowReady={(workflow) => applyDocumentWorkflow(workflow, false)}
-            onOpenWorkflow={(workflow) => applyDocumentWorkflow(workflow, true)}
-          />
-        )}
-        {view === 'sources' && (
-          <SourcesPanel
-            items={sources}
-            detail={detail}
-            savedRecords={savedRecords}
-            sourceStatuses={sourceStatuses}
-            onSourceStatusChange={updateSourceStatus}
-          />
+        {isSourceManagementView && (
+          <section className="source-management-page" aria-label="Source management">
+            <div className="source-management-tabs" role="tablist" aria-label="Source management sections">
+              {sourceManagementTabs.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceManagementTab === item.id}
+                  className={sourceManagementTab === item.id ? 'active' : ''}
+                  onClick={() => setSourceManagementTab(item.id)}
+                >
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                </button>
+              ))}
+            </div>
+
+            {sourceManagementTab === 'documents' && (
+              <DocumentIntakePanel
+                onOpenReading={openParsedDocumentReading}
+                onWorkflowReady={(workflow) => applyDocumentWorkflow(workflow, false)}
+                onOpenWorkflow={(workflow) => applyDocumentWorkflow(workflow, true)}
+              />
+            )}
+            {sourceManagementTab === 'profiles' && (
+              <IssuerProfilesPanel
+                profiles={issuerProfiles}
+                savedRecords={savedRecords}
+                currentRecord={detail}
+                onSaveProfile={saveIssuerProfile}
+              />
+            )}
+            {sourceManagementTab === 'sources' && (
+              <SourcesPanel
+                items={sources}
+                detail={detail}
+                savedRecords={savedRecords}
+                sourceStatuses={sourceStatuses}
+                onSourceStatusChange={updateSourceStatus}
+              />
+            )}
+          </section>
         )}
         {view === 'library' && (
           <ResearchLibraryPanel

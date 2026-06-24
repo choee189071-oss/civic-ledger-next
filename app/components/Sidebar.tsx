@@ -20,10 +20,8 @@ export function Sidebar({
   const primaryViews = [
     { id: 'search', label: 'Search', icon: '⌕' },
     { id: 'developments', label: 'Dashboard', icon: '↗' },
-    { id: 'documents', label: 'Documents', icon: '▧' },
-    { id: 'profiles', label: 'Analysis', icon: '▣' },
+    { id: 'source-management', label: 'Source Management', icon: '▧' },
     { id: 'library', label: 'Reports', icon: '▤' },
-    { id: 'sources', label: 'Settings', icon: '◇' },
   ];
 
   const workspaceViews = [

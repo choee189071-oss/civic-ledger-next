@@ -14,10 +14,8 @@ Purpose: reduce information overload before adding new capabilities. Every scree
 |---|---|---|---|---|
 | Search | Which issuer or question should I research? | Universal search input, run action, selected issuer answer | Search interpretation, quick starts, result tabs | Advanced settings, source filters, sort controls, raw citations |
 | Dashboard | What changed recently for monitored issuers? | Current monitor run and newest issuer developments | Sector tabs, single issuer vs general update modes, export buttons | Batch configuration, retry queue, raw generated update text |
-| Documents | What source document should become evidence? | PDF upload / URL and parse action | Parsed evidence package, document-to-report workflow card | Raw markdown, raw JSON, parser tier, extraction metadata |
-| Analysis | What do we know about this issuer profile? | Issuer summary, coverage, latest core documents | Editable profile fields, current evidence coverage | Source trail, update history, internal profile metadata |
+| Source Management | Which sources can support this analysis? | Document intake, issuer file coverage, source verification tabs | Parsed evidence packages, editable profile fields, current run source list | Raw markdown, raw JSON, parser metadata, connector notes, diagnostic source metadata |
 | Reports | Which saved work product should I continue? | Saved issuer/report list and open actions | Grouping by issuer, reading-room handoff | Saved timestamps, model/source metadata |
-| Settings / Sources | Which evidence can be trusted or used? | Current run source list with verification status | Extraction actions, source registry list | Connector descriptions, source key facts, diagnostic source metadata |
 | Editor | What report text am I editing now? | Reading document body | Comments, reviewer notes, export controls | Annotation history, raw markdown structure |
 | Templates | Which repeatable workflow should I run? | Workflow selection and run action | Watchlist run result summary | Per-issuer logs, retry details, raw report export |
 | Research Detail | What should I conclude from this research run? | Structured answer and confidence | Analyst workspace, credit factors, risks, evidence command panel | Retrieval diagnostics, document diagnostics, research setup, raw answer, raw evidence notes |
