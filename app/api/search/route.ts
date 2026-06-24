@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { searchFiscal } from '../../../lib/fiscal-api';
 import { results as mockResults } from '../../../lib/mock-data';
+import { searchUsaSpending } from '../../../lib/usaspending-api';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,6 +9,44 @@ export async function GET(request: Request) {
   const limit = parseInt(searchParams.get('limit') || '20', 10);
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   const source = searchParams.get('source') || 'all';
+
+  if (source === 'USAspending') {
+    try {
+      const endDate = new Date().toISOString().slice(0, 10);
+      const start = new Date();
+      start.setMonth(start.getMonth() - 6);
+      const records = await searchUsaSpending({
+        query: q,
+        startDate: start.toISOString().slice(0, 10),
+        endDate,
+        limit: Math.min(limit, 10),
+      });
+
+      return NextResponse.json({
+        items: records.map((record) => ({
+          id: record.id || record.url,
+          title: record.title,
+          topic: 'Federal Awards',
+          source: 'USAspending',
+          score: 92,
+          summary: record.summary,
+          snippet: record.summary,
+          citations: [record.url],
+          facts: [
+            record.recipientName && `Recipient: ${record.recipientName}`,
+            record.awardingAgency && `Awarding agency: ${record.awardingAgency}`,
+            record.awardAmount ? `Award amount: $${record.awardAmount.toLocaleString()}` : null,
+          ].filter(Boolean),
+        })),
+        meta: { total: records.length, q, limit, offset, dataSource: 'usaspending' },
+      });
+    } catch (err) {
+      return NextResponse.json({
+        items: [],
+        meta: { total: 0, q, dataSource: 'usaspending-error', error: String(err) },
+      });
+    }
+  }
 
   // If user is filtering for a non-fiscal source, fall back to mock data
   if (source !== 'all' && source !== 'Open FI$Cal') {

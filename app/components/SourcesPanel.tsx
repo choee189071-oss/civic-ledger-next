@@ -174,6 +174,18 @@ export function SourcesPanel({ items, detail, savedRecords, sourceStatuses, onSo
                   <div key={fact} className="fact-line">{fact}</div>
                 ))}
               </div>
+              <div className="source-actions">
+                {item.url && (
+                  <a className="button-secondary source-open-button" href={item.url} target="_blank" rel="noreferrer">
+                    Open source
+                  </a>
+                )}
+                {item.apiUrl && (
+                  <a className="button-secondary source-open-button" href={item.apiUrl} target="_blank" rel="noreferrer">
+                    API / docs
+                  </a>
+                )}
+              </div>
             </article>
           ))}
         </div>

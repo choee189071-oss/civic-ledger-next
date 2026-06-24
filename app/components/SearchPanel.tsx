@@ -192,9 +192,14 @@ export function SearchPanel(props: Props) {
                 Source
                 <select value={props.source} onChange={(e) => props.onSource(e.target.value)}>
                 <option value="all">All sources</option>
+                <option value="EMMA / MSRB">EMMA / MSRB</option>
+                <option value="USAspending">USAspending</option>
+                <option value="DebtWatch">DebtWatch</option>
+                <option value="SCO ByTheNumbers">SCO ByTheNumbers</option>
                 <option value="Open FI$Cal">Open FI$Cal</option>
                 <option value="California Budget">California Budget</option>
                 <option value="CDIAC">CDIAC</option>
+                <option value="CKAN / Data.gov">CKAN / Data.gov</option>
                 <option value="Debt Line">Debt Line</option>
                 </select>
               </label>

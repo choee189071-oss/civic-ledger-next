@@ -7,6 +7,7 @@ import {
   sourceRecencyLabel,
   type RecencyScope,
 } from '../../../lib/research-recency';
+import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
 
@@ -174,23 +175,80 @@ function uniqueQueries(queries: string[]) {
     next.push(cleaned);
   }
 
-  return next.slice(0, 6);
+  return next.slice(0, 10);
 }
 
 function withRecency(query: string, scope: RecencyScope) {
   return `${query} ${recencySearchSuffix(scope)}`;
 }
 
-function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string, recencyScope: RecencyScope) {
+function officialSourceQueries(issuer: string, preferredSource: string, recencyScope: RecencyScope) {
+  const allSourceQueries = [
+    `${issuer} site:emma.msrb.org official statement continuing disclosure`,
+    `${issuer} site:emma.msrb.org EMMA MSRB`,
+    `${issuer} site:debtwatch.treasurer.ca.gov debt issuance bonds`,
+    `${issuer} site:bythenumbers.sco.ca.gov financial data`,
+    `${issuer} site:treasurer.ca.gov/cdiac debt issuance`,
+    `${issuer} site:usaspending.gov federal grant award`,
+  ];
+  const sourceSpecific: Record<string, string[]> = {
+    'EMMA / MSRB': [
+      `${issuer} site:emma.msrb.org official statement`,
+      `${issuer} site:emma.msrb.org continuing disclosure`,
+      `${issuer} site:emma.msrb.org CUSIP`,
+    ],
+    USAspending: [
+      `${issuer} site:usaspending.gov federal awards grants`,
+      `${issuer} site:usaspending.gov recipient profile`,
+    ],
+    DebtWatch: [
+      `${issuer} site:debtwatch.treasurer.ca.gov debt issuance`,
+      `${issuer} site:debtwatch.treasurer.ca.gov bonds`,
+    ],
+    'SCO ByTheNumbers': [
+      `${issuer} site:bythenumbers.sco.ca.gov financial data`,
+      `${issuer} site:bythenumbers.sco.ca.gov revenues expenditures`,
+    ],
+    CDIAC: [
+      `${issuer} site:treasurer.ca.gov/cdiac debt issuance`,
+      `${issuer} site:treasurer.ca.gov/cdiac annual debt transparency report`,
+    ],
+    'CKAN / Data.gov': [
+      `${issuer} site:data.ca.gov CKAN datastore`,
+      `${issuer} site:data.ca.gov fiscal spending revenue`,
+    ],
+    'Open FI$Cal': [
+      `${issuer} site:open.fiscal.ca.gov spending expenditures`,
+      `${issuer} site:data.ca.gov fiscal spending datastore`,
+    ],
+    'California Budget': [
+      `${issuer} site:ebudget.ca.gov budget fiscal year`,
+      `${issuer} site:dof.ca.gov budget financial plan`,
+    ],
+    'Debt Line': [
+      `${issuer} site:treasurer.ca.gov/cdiac/debtline proposed sold debt issues`,
+      `${issuer} site:treasurer.ca.gov/cdiac/debtline bond issuance`,
+    ],
+  };
+
+  const selected = preferredSource === 'all'
+    ? allSourceQueries
+    : sourceSpecific[preferredSource] ?? [];
+
+  return selected.map((query) => withRecency(query, recencyScope));
+}
+
+function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string, recencyScope: RecencyScope, preferredSource = 'all') {
   if (/CCD_GENERAL_UPDATE|ALL_CCD_ISSUERS/i.test(customAngle)) {
     return uniqueQueries([
+      ...officialSourceQueries(issuer, preferredSource, recencyScope),
       'California community college district rating action outlook recent developments',
       'California community college district bond issuance official statement',
       'California community college district continuing disclosure EMMA MSRB',
       'California community college district board agenda budget enrollment recent developments',
       'California CCD capital projects facilities bond measure',
       'California community college district accreditation governance litigation labor',
-    ].map((query) => withRecency(query, recencyScope)));
+    ].map((query) => query.includes('published or updated since') ? query : withRecency(query, recencyScope)));
   }
 
   const custom = customAngle ? `${issuer} ${customAngle}` : issuer;
@@ -259,7 +317,10 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
     ],
   };
 
-  return uniqueQueries(strategies[promptMode].map((query) => withRecency(query, recencyScope)));
+  return uniqueQueries([
+    ...officialSourceQueries(issuer, preferredSource, recencyScope),
+    ...strategies[promptMode].map((query) => withRecency(query, recencyScope)),
+  ]);
 }
 
 function documentTypeFor(result: SonarSearchResult) {
@@ -279,6 +340,10 @@ function documentTypeFor(result: SonarSearchResult) {
 
   if (/emma|msrb|continuing disclosure|annual disclosure/.test(text)) {
     return 'Continuing Disclosure';
+  }
+
+  if (/usaspending|federal award|federal grant|recipient profile/.test(text)) {
+    return 'Federal Award / Grant';
   }
 
   if (/rating report|rating action|moody|s&p|standard & poor|fitch|kroll|kb ra|bond rating/.test(text)) {
@@ -333,7 +398,7 @@ function classifySourceTier(result: SonarSearchResult) {
   }
 
   if (
-    /\.gov\b|ladwp\.com|official|issuer|board report|budget|capital improvement|\bcip\b|rate study|regulatory filing|financial plan|treasurer\.ca\.gov|ebudget\.ca\.gov/.test(text)
+    /\.gov\b|ladwp\.com|official|issuer|board report|budget|capital improvement|\bcip\b|rate study|regulatory filing|financial plan|treasurer\.ca\.gov|ebudget\.ca\.gov|debtwatch\.treasurer\.ca\.gov|bythenumbers\.sco\.ca\.gov|usaspending\.gov|data\.ca\.gov/.test(text)
   ) {
     return {
       rank: 2,
@@ -384,9 +449,9 @@ function classifyResults(results: SonarSearchResult[], financeFocused: boolean, 
       sourceTierRank: tier.rank,
       sourceTierName: tier.name,
       documentType: tier.documentType,
-      status: 'Candidate',
+      status: result.status || 'Candidate',
       recencyWindow,
-      notes: `${tier.notes} Recency: ${recencyWindow}.`,
+      notes: `${result.notes ? `${result.notes} ` : ''}${tier.notes} Recency: ${recencyWindow}.`,
     };
   });
 
@@ -595,6 +660,20 @@ function buildEvidencePackage({
       fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
       rule: 'Prefer last 3 months; expand to last 6 months only when no credible 3-month evidence is found; label older material as background.',
     },
+    source_strategy: {
+      structured_connectors: searchResults.some((result) => result.source === 'USAspending')
+        ? ['USAspending API']
+        : [],
+      preferred_official_domains: [
+        'emma.msrb.org',
+        'debtwatch.treasurer.ca.gov',
+        'bythenumbers.sco.ca.gov',
+        'treasurer.ca.gov/cdiac',
+        'usaspending.gov',
+        'data.ca.gov',
+      ],
+      note: 'EMMA/MSRB, DebtWatch, SCO ByTheNumbers, CDIAC, and CKAN sources are prioritized through domain-targeted search unless a structured API connector is configured.',
+    },
     search_queries_used: searchQueries,
     document_inventory: buildDocumentInventory(searchResults).map((item) => ({
       title: item.document,
@@ -630,6 +709,57 @@ function candidateSourceList(results: SonarSearchResult[]) {
   }).join('\n');
 }
 
+function usaSpendingToSearchResult(award: UsaSpendingAward): SonarSearchResult {
+  return {
+    title: award.title,
+    url: award.url,
+    date: award.startDate,
+    last_updated: award.endDate,
+    snippet: award.summary,
+    source: 'USAspending',
+    query: 'USAspending API recipient award search',
+    sourceTier: 'Tier 2',
+    sourceTierRank: 2,
+    sourceTierName: 'Official federal spending source',
+    documentType: 'Federal Award / Grant',
+    status: 'Candidate',
+    notes: 'Structured official connector result from USAspending.gov. Use for federal grant or award exposure, not as municipal disclosure replacement.',
+  };
+}
+
+async function structuredConnectorResults(issuer: string, source: string, recencyScope: RecencyScope) {
+  const shouldSearchUsaSpending = source === 'all' || source === 'USAspending';
+  const results: SonarSearchResult[] = [];
+
+  if (shouldSearchUsaSpending) {
+    try {
+      const awards = await searchUsaSpending({
+        query: issuer,
+        startDate: recencyScope.fallbackStartDate,
+        endDate: recencyScope.asOfDate,
+        limit: 6,
+      });
+      results.push(...awards.map(usaSpendingToSearchResult));
+    } catch {
+      results.push({
+        title: 'USAspending connector check',
+        url: 'https://www.usaspending.gov/search',
+        source: 'USAspending',
+        query: 'USAspending API recipient award search',
+        sourceTier: 'Tier 2',
+        sourceTierRank: 2,
+        sourceTierName: 'Official federal spending source',
+        documentType: 'Federal Award / Grant',
+        status: 'Needs manual verification',
+        recencyWindow: 'Undated source',
+        notes: 'USAspending API did not return structured results for this run. Verify manually if federal grants or awards matter to the credit.',
+      });
+    }
+  }
+
+  return results;
+}
+
 function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean, recencyScope: RecencyScope) {
   if (!financeFocused) {
     return [
@@ -651,7 +781,7 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     '',
     '2. Research Mode',
     `- Selected mode: ${modeLabel}`,
-    '- Search provider: Perplexity Sonar + Perplexity Search API',
+    '- Search provider: Perplexity Sonar + Perplexity Search API + official connector/domain search where available',
     '- Timestamp:',
     '- Search scope:',
     '',
@@ -801,7 +931,10 @@ export async function POST(request: Request) {
   }
 
   const model = process.env.PUBFIN_MODEL || 'sonar-pro';
-  const searchQueries = buildSearchQueries(query, promptMode, customAngle, recencyScope);
+  const searchQueries = buildSearchQueries(query, promptMode, customAngle, recencyScope, source);
+  const structuredResults = workflowOptions.includeLiveSearch
+    ? await structuredConnectorResults(query, source, recencyScope)
+    : [];
   const searchSettled = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity
     ? await Promise.allSettled(
       searchQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
@@ -811,7 +944,7 @@ export async function POST(request: Request) {
     result.status === 'fulfilled' ? result.value : []
   );
   const classifiedSearchApiResults = classifyResults(
-    mergeSearchResults(searchApiResults),
+    mergeSearchResults(structuredResults, searchApiResults),
     financeFocused,
     recencyScope
   );
@@ -825,7 +958,7 @@ export async function POST(request: Request) {
     'Prioritize municipal finance evidence over general encyclopedia, media, or policy summaries.',
     'Source quality tiers:',
     'Tier 1 = ACFR/audited financial statements, official statements/POS, EMMA/MSRB filings, continuing disclosures, rating agency reports/actions, bond documents, investor relations debt pages.',
-    'Tier 2 = official issuer/government sources, board reports, budget documents, CIP, rate studies, regulatory filings, government reports.',
+    'Tier 2 = official issuer/government sources, board reports, budget documents, CIP, rate studies, regulatory filings, government reports, USAspending federal award data, SCO ByTheNumbers, CDIAC, DebtWatch, and CKAN public datasets.',
     'Tier 3 = analytical or technical sources such as NREL, state agencies, court opinions, industry reports, technical studies.',
     'Tier 4 = media, YouTube, blogs, secondary summaries. Avoid Tier 4 for finance-focused conclusions unless no better source exists.',
     financeFocused
@@ -849,6 +982,7 @@ export async function POST(request: Request) {
     `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
     `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
     `Search scope: ${searchQueries.join(' | ')}`,
+    `Structured connector scope: ${structuredResults.length > 0 ? 'USAspending API plus preferred official domain search' : 'Preferred official domain search'}`,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
     '',
     'Candidate sources from the Search API, already ranked by source quality:',
