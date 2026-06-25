@@ -235,7 +235,7 @@ function mergeSearchResults(...resultGroups: SonarSearchResult[][]) {
     merged.push(result);
   }
 
-  return merged.slice(0, 20);
+  return merged.slice(0, 40);
 }
 
 function normalizePromptMode(value: unknown): PromptMode {
@@ -332,6 +332,44 @@ function officialSourceQueries(issuer: string, preferredSource: string, recencyS
     : sourceSpecific[preferredSource] ?? [];
 
   return selected.map((query) => withRecency(query, recencyScope));
+}
+
+function knownOfficialSeedResults(issuer: string): SonarSearchResult[] {
+  const normalized = issuer.toLowerCase();
+
+  if (!/\bladwp\b|los angeles department of water and power|los angeles department of water/.test(normalized)) {
+    return [];
+  }
+
+  return [
+    {
+      title: 'LADWP Investor Relations',
+      url: 'https://www.ladwp.com/doing-business-ladwp/investor-relations',
+      source: 'Los Angeles Department of Water and Power',
+      query: 'Known official issuer source registry',
+      snippet: 'Official LADWP investor relations landing page for bondholder and issuer disclosure materials.',
+      status: 'Candidate',
+      notes: 'Known official issuer source added to improve recall. Use as a starting point; verify underlying documents before final credit conclusions.',
+    },
+    {
+      title: 'LADWP Audited Financial Statements',
+      url: 'https://www.ladwp.com/doing-business-ladwp/investor-relations/audited-financial-statements',
+      source: 'Los Angeles Department of Water and Power',
+      query: 'Known official issuer source registry',
+      snippet: 'Official LADWP audited financial statements page. Use to locate current audited financial statements / ACFR source material.',
+      status: 'Candidate',
+      notes: 'Known official issuer source added to improve audited financial statement recall. Verify the latest statement date before final use.',
+    },
+    {
+      title: 'LADWP Board Meetings and Agendas',
+      url: 'https://www.ladwp.com/who-we-are/board-commissioners/board-meetings-and-agendas',
+      source: 'Los Angeles Department of Water and Power',
+      query: 'Known official issuer source registry',
+      snippet: 'Official LADWP board meetings and agendas page. Use for board agenda, minutes, resolutions, RFP, and authorization monitoring.',
+      status: 'Candidate',
+      notes: 'Known official issuer source added to improve board-material recall. Review packets and agendas for issuer-specific actions.',
+    },
+  ];
 }
 
 function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle: string, recencyScope: RecencyScope, preferredSource = 'all') {
@@ -1103,7 +1141,7 @@ async function searchPerplexity(apiKey: string, query: string) {
     },
     body: JSON.stringify({
       query,
-      max_results: 5,
+      max_results: 8,
       search_context_size: 'medium',
     }),
   });
@@ -1211,6 +1249,7 @@ export async function POST(request: Request) {
   const structuredResults = workflowOptions.includeLiveSearch
     ? await structuredConnectorResults(researchSubject, sourceForSearch, recencyScope)
     : [];
+  const officialSeedResults = knownOfficialSeedResults(researchSubject);
   const searchSettled = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity
     ? await Promise.allSettled(
       searchQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
@@ -1220,7 +1259,7 @@ export async function POST(request: Request) {
     result.status === 'fulfilled' ? result.value : []
   );
   const classifiedSearchApiResults = classifyResults(
-    mergeSearchResults(structuredResults, searchApiResults),
+    mergeSearchResults(officialSeedResults, structuredResults, searchApiResults),
     financeFocused,
     recencyScope
   );
@@ -1272,6 +1311,7 @@ export async function POST(request: Request) {
     `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
     `Search scope: ${searchQueries.join(' | ')}`,
     `Structured connector scope: ${structuredResults.length > 0 ? 'USAspending API plus preferred official domain search' : 'Preferred official domain search'}`,
+    officialSeedResults.length > 0 ? `Known official source registry: ${officialSeedResults.map((result) => result.title).join(' | ')}` : null,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
     issuerProfileContext ? '' : null,
     issuerProfileContext ? issuerProfileContext : null,
