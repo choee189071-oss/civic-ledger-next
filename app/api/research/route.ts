@@ -255,7 +255,7 @@ function normalizeWorkflowOptions(value: any) {
   };
 }
 
-function uniqueQueries(queries: string[]) {
+function uniqueQueries(queries: string[], limit = 10) {
   const seen = new Set<string>();
   const next: string[] = [];
 
@@ -271,7 +271,7 @@ function uniqueQueries(queries: string[]) {
     next.push(cleaned);
   }
 
-  return next.slice(0, 10);
+  return next.slice(0, limit);
 }
 
 function withRecency(query: string, scope: RecencyScope) {
@@ -488,6 +488,48 @@ function buildSearchQueries(issuer: string, promptMode: PromptMode, customAngle:
     ...officialSourceQueries(issuer, preferredSource, recencyScope),
     ...strategies[promptMode].map((query) => withRecency(query, recencyScope)),
   ]);
+}
+
+function buildBaselineSourceQueries(issuer: string, preferredSource = 'all', recencyScope?: RecencyScope) {
+  const currentYear = Number(recencyScope?.asOfDate.slice(0, 4)) || new Date().getFullYear();
+  const years = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3].join(' ');
+  const issuerTerms = `${issuer} ${years}`;
+
+  const generalQueries = [
+    `${issuerTerms} investor relations audited financial statements annual comprehensive financial report PDF`,
+    `${issuerTerms} official statement revenue bonds EMMA MSRB continuing disclosure`,
+    `${issuerTerms} rating report rating action Moody's S&P Fitch KBRA`,
+    `${issuerTerms} adopted budget capital improvement plan CIP financial plan PDF`,
+    `${issuerTerms} board agenda board packet bond resolution municipal advisor bond counsel RFP`,
+    `${issuerTerms} rate study rate ordinance rate covenant additional bonds test debt service coverage`,
+    `${issuerTerms} single audit SEFA federal awards grants`,
+    `${issuerTerms} DebtWatch CDIAC debt issuance bonds`,
+  ];
+
+  const sourceSpecific: Record<string, string[]> = {
+    'EMMA / MSRB': [
+      `${issuerTerms} site:emma.msrb.org official statement continuing disclosure annual report`,
+      `${issuerTerms} EMMA MSRB CUSIP revenue bonds`,
+    ],
+    USAspending: [
+      `${issuerTerms} site:usaspending.gov federal awards grants recipient`,
+      `${issuerTerms} single audit SEFA federal awards`,
+    ],
+    DebtWatch: [
+      `${issuerTerms} site:debtwatch.treasurer.ca.gov debt issuance bonds`,
+      `${issuerTerms} CDIAC DebtWatch bonds`,
+    ],
+    'SCO ByTheNumbers': [
+      `${issuerTerms} site:bythenumbers.sco.ca.gov financial data revenues expenditures`,
+      `${issuerTerms} SCO ByTheNumbers local government financial data`,
+    ],
+    CDIAC: [
+      `${issuerTerms} site:treasurer.ca.gov/cdiac debt issuance official statement`,
+      `${issuerTerms} CDIAC debt issuance bonds`,
+    ],
+  };
+
+  return uniqueQueries(preferredSource === 'all' ? generalQueries : sourceSpecific[preferredSource] ?? generalQueries, 8);
 }
 
 function documentTypeFor(result: SonarSearchResult) {
@@ -721,6 +763,17 @@ function buildCoverageDashboard(results: SonarSearchResult[]) {
     area,
     ...coverageStatus(results, pattern as RegExp),
   }));
+}
+
+function coverageFoundCount(results: SonarSearchResult[]) {
+  return buildCoverageDashboard(results).filter((row) => row.status === 'Found').length;
+}
+
+function shouldRunBaselineSourceSearch(results: SonarSearchResult[], financeFocused: boolean) {
+  if (!financeFocused) return false;
+  if (results.length < 12) return true;
+  if (!hasCoreFinanceDocuments(results)) return true;
+  return coverageFoundCount(results) < 5;
 }
 
 function sourceText(result: SonarSearchResult) {
@@ -1258,17 +1311,41 @@ export async function POST(request: Request) {
   const searchApiResults = searchSettled.flatMap((result) =>
     result.status === 'fulfilled' ? result.value : []
   );
-  const classifiedSearchApiResults = classifyResults(
+  let classifiedSearchApiResults = classifyResults(
     mergeSearchResults(officialSeedResults, structuredResults, searchApiResults),
     financeFocused,
     recencyScope
   );
+  const baselineQueries = workflowOptions.includeLiveSearch && workflowOptions.includePerplexity && shouldRunBaselineSourceSearch(classifiedSearchApiResults, financeFocused)
+    ? buildBaselineSourceQueries(researchSubject, sourceForSearch, recencyScope)
+    : [];
+  const baselineSettled = baselineQueries.length > 0
+    ? await Promise.allSettled(
+      baselineQueries.map((searchQuery) => searchPerplexity(apiKey, searchQuery))
+    )
+    : [];
+  const baselineSearchApiResults = baselineSettled.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value.map((item) => ({
+      ...item,
+      notes: `${item.notes ? `${item.notes} ` : ''}Baseline source fallback result. Use as structural context unless the source date is current.`,
+    })) : []
+  );
+
+  if (baselineSearchApiResults.length > 0) {
+    classifiedSearchApiResults = classifyResults(
+      mergeSearchResults(officialSeedResults, structuredResults, searchApiResults, baselineSearchApiResults),
+      financeFocused,
+      recencyScope
+    );
+  }
+
+  const allSearchQueries = uniqueQueries([...searchQueries, ...baselineQueries], 24);
   const coreFinanceDocumentsFound = hasCoreFinanceDocuments(classifiedSearchApiResults);
   const preliminaryDocumentDiagnostics = buildDocumentDiagnostics(researchSubject, classifiedSearchApiResults);
   const preliminaryRetrievalDiagnostics = buildRetrievalDiagnostics({
     issuer: researchSubject,
     sources: classifiedSearchApiResults,
-    searchQueries,
+    searchQueries: allSearchQueries,
     cachedDocumentCount: cachedDocumentCount(issuerProfile),
     liveDocumentCount: classifiedSearchApiResults.length,
   });
@@ -1309,7 +1386,8 @@ export async function POST(request: Request) {
     `Timestamp: ${timestamp}`,
     `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
     `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
-    `Search scope: ${searchQueries.join(' | ')}`,
+    `Search scope: ${allSearchQueries.join(' | ')}`,
+    baselineQueries.length > 0 ? `Baseline source fallback triggered: ${baselineQueries.join(' | ')}` : null,
     `Structured connector scope: ${structuredResults.length > 0 ? 'USAspending API plus preferred official domain search' : 'Preferred official domain search'}`,
     officialSeedResults.length > 0 ? `Known official source registry: ${officialSeedResults.map((result) => result.title).join(' | ')}` : null,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
@@ -1378,7 +1456,7 @@ export async function POST(request: Request) {
   const retrievalDiagnostics = buildRetrievalDiagnostics({
     issuer: researchSubject,
     sources: searchResults,
-    searchQueries,
+    searchQueries: allSearchQueries,
     cachedDocumentCount: cachedDocumentCount(issuerProfile),
     liveDocumentCount: searchResults.length,
   });
@@ -1396,6 +1474,9 @@ export async function POST(request: Request) {
     universalSearch.summary,
     `Universal search facets: ${universalSearch.facets.map((facet) => `${facet.label}: ${facet.value}`).join('; ') || 'none'}`,
     `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}; fallback: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
+    baselineQueries.length > 0
+      ? `Baseline source fallback ran because initial source coverage was limited; older documents are structural context, not recent developments.`
+      : 'Baseline source fallback did not run.',
     financeFocused
       ? finalCoreFinanceDocumentsFound
         ? 'Core finance documents were found in this search run.'
@@ -1411,7 +1492,7 @@ export async function POST(request: Request) {
     outputType,
     timestamp,
     recencyScope,
-    searchQueries,
+    searchQueries: allSearchQueries,
     searchResults,
     issuerProfile,
     universalSearch,
@@ -1505,6 +1586,14 @@ export async function POST(request: Request) {
         recency_policy: {
           preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
           fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
+          baseline_source_fallback: baselineQueries.length > 0
+            ? 'Triggered because initial live search coverage was limited. Older sources are structural context, not recent developments.'
+            : 'Not triggered.',
+        },
+        search_strategy: {
+          initial_queries: searchQueries,
+          baseline_queries: baselineQueries,
+          all_queries: allSearchQueries,
         },
         issuer_profile_used: issuerProfile ? {
           issuer: issuerProfile.issuer ?? researchSubject,
@@ -1535,7 +1624,7 @@ export async function POST(request: Request) {
       coreFinanceDocumentsFound: finalCoreFinanceDocumentsFound,
       documentInventory,
       coverageDashboard,
-      searchQueries,
+      searchQueries: allSearchQueries,
       relatedQuestions: sonar.related_questions ?? [],
       generatedAt: timestamp,
       recencyScope,
