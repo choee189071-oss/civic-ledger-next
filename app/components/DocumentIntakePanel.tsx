@@ -17,6 +17,51 @@ const documentTypes = [
   { value: 'ACFR / audited financial statements', label: 'ACFR / Audit' },
   { value: 'Official Statement / POS', label: 'Official Statement / POS' },
   { value: 'EMMA annual report / continuing disclosure', label: 'EMMA Annual Report' },
+  { value: 'Budget / CIP', label: 'Budget / CIP' },
+  { value: 'Board agenda / packet / minutes', label: 'Board Packet / Agenda' },
+  { value: 'Rate study / rate ordinance', label: 'Rate Study / Ordinance' },
+  { value: 'Rating report / rating action', label: 'Rating Report / Action' },
+  { value: 'Single Audit / SEFA', label: 'Single Audit / SEFA' },
+  { value: 'Other public finance source', label: 'Other Source' },
+];
+
+const importantFileSlots = [
+  {
+    type: 'ACFR / audited financial statements',
+    label: 'ACFR / Audit',
+    why: 'Revenue, expenses, liquidity, debt notes, pensions, OPEB, and audited trend evidence.',
+    target: 'Financial performance',
+  },
+  {
+    type: 'Official Statement / POS',
+    label: 'OS / POS',
+    why: 'Security pledge, debt service, rate covenant, additional bonds test, risks, and CUSIP detail.',
+    target: 'Debt profile',
+  },
+  {
+    type: 'EMMA annual report / continuing disclosure',
+    label: 'Continuing Disclosure',
+    why: 'Updated annual filing, covenant compliance, event notices, and current disclosure trail.',
+    target: 'Monitoring',
+  },
+  {
+    type: 'Budget / CIP',
+    label: 'Budget / CIP',
+    why: 'Forward-looking revenue assumptions, expense pressure, capital plan, and funding sources.',
+    target: 'Outlook',
+  },
+  {
+    type: 'Board agenda / packet / minutes',
+    label: 'Board Packet',
+    why: 'Bond authorization, resolutions, RFP approvals, MA or bond counsel hiring, and early deal signals.',
+    target: 'Recent developments',
+  },
+  {
+    type: 'Rate study / rate ordinance',
+    label: 'Rate Study',
+    why: 'Rate path, affordability, coverage targets, political approval, and covenant support.',
+    target: 'Revenue sufficiency',
+  },
 ];
 
 const tierOptions = [
@@ -148,6 +193,14 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
     onOpenWorkflow(workflowPackage);
   }
 
+  function selectImportantFile(type: string, label: string) {
+    setDocumentType(type);
+    if (!title.trim()) {
+      setTitle(`${issuer.trim() ? `${issuer.trim()} ` : ''}${label}`);
+    }
+  }
+
+  const selectedImportantFile = importantFileSlots.find((slot) => slot.type === documentType);
   const foundCount = result?.evidencePackage.findings.filter((finding) => finding.status === 'Found').length ?? 0;
   const missingCount = result?.evidencePackage.missingFields.length ?? 0;
 
@@ -155,19 +208,38 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
     <section className="full-page-panel document-intake-page">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">PDF Intelligence</p>
-          <h2>Document intake</h2>
-          <p className="muted small">Parse ACFRs, official statements, and EMMA annual reports into structured public-finance evidence.</p>
+          <p className="eyebrow">Source Management</p>
+          <h2>Important files</h2>
+          <p className="muted small">Upload or link the files that matter most, then convert them into structured public-finance evidence.</p>
         </div>
-        <span className="count">{result ? `${foundCount}/${result.evidencePackage.findings.length}` : '3 core docs'}</span>
+        <span className="count">{result ? `${foundCount}/${result.evidencePackage.findings.length}` : '6 priority files'}</span>
+      </div>
+
+      <div className="important-file-slots" aria-label="Priority public finance file types">
+        {importantFileSlots.map((slot) => (
+          <button
+            key={slot.type}
+            type="button"
+            className={documentType === slot.type ? 'active' : ''}
+            onClick={() => selectImportantFile(slot.type, slot.label)}
+          >
+            <span>{slot.target}</span>
+            <strong>{slot.label}</strong>
+            <em>{slot.why}</em>
+          </button>
+        ))}
       </div>
 
       <div className="document-intake-grid">
         <section className="workflow-config-panel">
           <div className="section-heading">
             <div>
-              <h3>Upload or link PDF</h3>
-              <p className="muted small">For large ACFRs, a public PDF URL is usually more reliable than browser upload.</p>
+              <h3>Add selected file</h3>
+              <p className="muted small">
+                {selectedImportantFile
+                  ? `${selectedImportantFile.label}: ${selectedImportantFile.why}`
+                  : 'For large ACFRs and official statements, a public PDF URL is usually more reliable than browser upload.'}
+              </p>
             </div>
           </div>
 
@@ -233,7 +305,7 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
 
           <div className="source-list-section compact-note">
             <h3>What this extracts</h3>
-            <p className="muted small">ACFR: MD&A, liquidity, debt, pensions/OPEB. OS/POS: pledge, debt service, covenants, ABT. EMMA annual report: filing period, debt updates, covenant evidence, event notices.</p>
+            <p className="muted small">ACFR: MD&A, liquidity, debt, pensions/OPEB. OS/POS: pledge, debt service, covenants, ABT. EMMA annual report: filing period and covenant updates. Budget/CIP, board packets, and rate studies: forward-looking risks, authorizations, RFPs, and rate-path evidence.</p>
           </div>
         </section>
 

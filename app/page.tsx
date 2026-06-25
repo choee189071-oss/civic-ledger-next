@@ -55,8 +55,8 @@ const STORAGE_KEYS = {
 const sourceManagementTabs = [
   {
     id: 'documents',
-    label: 'Document Intake',
-    description: 'Upload PDFs and turn source files into evidence.',
+    label: 'Important Files',
+    description: 'Upload or link priority PDFs and turn them into evidence.',
   },
   {
     id: 'profiles',
