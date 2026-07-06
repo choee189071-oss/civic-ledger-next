@@ -379,7 +379,7 @@ export function SearchPanel(props: Props) {
     props.onCustomAngle(next.customAngle);
   }
 
-  if (props.collapsed && !isReaderMode) {
+  if (props.collapsed) {
     return (
       <section className="workspace-panel query-panel query-panel-collapsed" aria-label="Research intake collapsed">
         <button
@@ -413,33 +413,31 @@ export function SearchPanel(props: Props) {
     <section className={`workspace-panel query-panel ${isReaderMode ? 'reader-query-panel' : ''}`}>
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">{isReaderMode ? 'Research' : 'Ask'}</p>
-          <h2>{isReaderMode ? 'Start research' : 'Research intake'}</h2>
+          <p className="eyebrow">Ask</p>
+          <h2>Research intake</h2>
         </div>
         <div className="panel-heading-actions">
-          {!isReaderMode && (
-            <button
-              className="intake-resize-button"
-              type="button"
-              aria-label="Collapse research intake"
-              title="Collapse research intake"
-              onClick={props.onToggleCollapse}
-            >
-              ⇤
-            </button>
-          )}
+          <button
+            className="intake-resize-button"
+            type="button"
+            aria-label="Collapse research intake"
+            title="Collapse research intake"
+            onClick={props.onToggleCollapse}
+          >
+            ⇤
+          </button>
           <span className="count">{props.items.length}</span>
         </div>
       </div>
 
       <div className="searchbox">
-        <label className="field-label" htmlFor="issuer-search">{isReaderMode ? 'Issuer or question' : 'Universal Search'}</label>
+        <label className="field-label" htmlFor="issuer-search">Universal Search</label>
         <input
           id="issuer-search"
           value={props.query}
           onChange={(e) => props.onQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
-          placeholder={isReaderMode ? 'Search an issuer, sector, bond, or question' : 'Issuer, alias, CUSIP, ticker, sector, bond type, state, or natural language'}
+          placeholder="Issuer, alias, CUSIP, ticker, sector, bond type, state, or natural language"
         />
         <button
           className="icon-button primary"
@@ -460,11 +458,11 @@ export function SearchPanel(props: Props) {
           </div>
         </div>
       )}
-      {!isReaderMode && <div className="shortcut-strip" aria-label="Keyboard shortcuts">
+      <div className="shortcut-strip" aria-label="Keyboard shortcuts">
         <span><kbd>/</kbd> Search</span>
         <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick Search</span>
         <span><kbd>⌘</kbd><kbd>Enter</kbd> Run Research</span>
-      </div>}
+      </div>
 
       {!isReaderMode && <details className="progressive-section compact-disclosure">
         <summary>
@@ -535,7 +533,7 @@ export function SearchPanel(props: Props) {
         </div>
       )}
 
-      {!isReaderMode && <div className="prompt-builder">
+      <div className="prompt-builder">
         <label>
           Research Type
           <select value={selectedResearchTypeId} onChange={(e) => applyResearchType(e.target.value)}>
@@ -619,7 +617,6 @@ export function SearchPanel(props: Props) {
           </div>
         )}
       </div>
-      }
 
       <div className="segmented-control">
         {[
