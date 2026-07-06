@@ -876,25 +876,18 @@ export default function HomePage() {
       return;
     }
 
-    if (detail.kind === 'research') {
-      setReading({
-        id: detail.id,
-        recordId: detail.id,
-        title: `Reading: ${detail.title}`,
-        body: [
-          detail.summary,
-          detail.snippet,
-          ...(detail.facts ?? []),
-        ].filter(Boolean),
-      });
-      touchRecentWorkspace(detail, 'Reading room');
-      setView('reading');
-      return;
-    }
-
-    if (selectedId) {
-      loadReading(selectedId);
-    }
+    setReading({
+      id: detail.id,
+      recordId: detail.id,
+      title: `Reading: ${detail.title}`,
+      body: [
+        detail.summary,
+        detail.snippet,
+        ...(detail.facts ?? []),
+      ].filter(Boolean),
+    });
+    touchRecentWorkspace(detail, 'Reading room');
+    setView('reading');
   }
 
   function saveRecord() {
