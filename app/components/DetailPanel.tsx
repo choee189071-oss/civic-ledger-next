@@ -12,6 +12,7 @@ import { buildEvidenceEngine, type EvidenceCoverage } from '../../lib/evidence-e
 import { buildResearchWorkspace, type ResearchWorkspace } from '../../lib/research-workspace';
 import { buildIssuerDashboard, type IssuerDashboard } from '../../lib/issuer-dashboard';
 import { buildStructuredAnswer, type StructuredAnswer } from '../../lib/ai-experience';
+import { workspaceFeatures } from '../../lib/workspace-features';
 
 type Props = {
   detail: any;
@@ -58,7 +59,7 @@ const reportTemplates = [
 
 const workflowTabs = [
   ['discovery', 'Research Package'],
-  ['dashboard', 'Dashboard'],
+  ...(workspaceFeatures.issuerDashboardTab ? [['dashboard', 'Dashboard']] : []),
   ['report', 'Draft Report'],
   ['export', 'Deliverable'],
 ];

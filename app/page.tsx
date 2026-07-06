@@ -17,6 +17,7 @@ import {
   profileKey,
   profilePromptContext,
 } from '../lib/issuer-profile-database';
+import { workspaceFeatures } from '../lib/workspace-features';
 import type {
   GeneratedReport,
   FavoriteItem,
@@ -317,6 +318,11 @@ export default function HomePage() {
   }
 
   function navigateWorkspace(nextView: string) {
+    if (nextView === 'developments' && !workspaceFeatures.dashboardView) {
+      setView('search');
+      return;
+    }
+
     if (nextView === 'documents' || nextView === 'profiles' || nextView === 'sources') {
       openSourceManagement(nextView);
       return;
@@ -1192,7 +1198,7 @@ export default function HomePage() {
             onDeleteAnnotation={deleteReadingAnnotation}
           />
         )}
-        {view === 'developments' && (
+        {workspaceFeatures.dashboardView && view === 'developments' && (
           <IssuerDevelopmentsPanel
             savedRecords={savedRecords}
             onRunIssuerScan={startIssuerDevelopmentScan}

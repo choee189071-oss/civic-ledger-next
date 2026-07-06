@@ -1,3 +1,5 @@
+import { workspaceFeatures } from '../../lib/workspace-features';
+
 type Props = {
   current: string;
   onChange: (view: string) => void;
@@ -19,7 +21,7 @@ export function Sidebar({
 }: Props) {
   const primaryViews = [
     { id: 'search', label: 'Search', icon: '⌕' },
-    { id: 'developments', label: 'Dashboard', icon: '↗' },
+    ...(workspaceFeatures.dashboardView ? [{ id: 'developments', label: 'Dashboard', icon: '↗' }] : []),
     { id: 'source-management', label: 'Source Management', icon: '▧' },
     { id: 'library', label: 'Reports', icon: '▤' },
   ];
