@@ -1,5 +1,5 @@
 export const workspaceFeatures = {
-  dashboardView: false,
-  issuerDashboardTab: false,
-  workflowCenterView: false,
+  dashboardView: true,
+  issuerDashboardTab: true,
+  workflowCenterView: true,
 } as const;

@@ -51,6 +51,7 @@ const STORAGE_KEYS = {
   readingAnnotations: 'civic-ledger-reading-annotations',
   recentWorkspaces: 'civic-ledger-recent-workspaces',
   favorites: 'civic-ledger-favorites',
+  experienceMode: 'civic-ledger-experience-mode',
 };
 
 const sourceManagementTabs = [
@@ -163,8 +164,14 @@ function isEditableTarget(target: EventTarget | null) {
   return target.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
 }
 
-function screenFocus(view: string) {
-  const sourceManagementFocus = {
+function screenFocus(view: string, experienceMode: 'reader' | 'supervisor') {
+  const sourceManagementFocus = experienceMode === 'reader' ? {
+    eyebrow: 'Source Management',
+    title: 'Add source files',
+    description: 'Upload a PDF or paste a public link to turn source material into a readable workspace.',
+    primaryAction: 'Add Source',
+    secondaryAction: 'Search Issuer',
+  } : {
     eyebrow: 'Source Management',
     title: 'Which sources can support this analysis?',
     description: 'Upload core documents, maintain issuer files, and verify source quality in one evidence workspace.',
@@ -175,14 +182,14 @@ function screenFocus(view: string) {
   const screens: Record<string, { eyebrow: string; title: string; description: string; primaryAction: string; secondaryAction?: string }> = {
     search: {
       eyebrow: 'Search',
-      title: 'Which issuer are we researching?',
-      description: 'Start with one issuer, alias, CUSIP, sector, bond type, or natural-language question. The workspace will organize evidence and analysis after the run.',
+      title: 'Start a research run',
+      description: 'Search an issuer, sector, bond type, CUSIP, or question. The result will open as a readable workspace.',
       primaryAction: 'Run Research',
       secondaryAction: 'Source Management',
     },
     developments: {
-      eyebrow: 'Dashboard',
-      title: 'What changed recently?',
+      eyebrow: 'Supervisor',
+      title: 'Recent developments dashboard',
       description: 'Monitor issuer and sector developments, then turn meaningful changes into a saved research run.',
       primaryAction: 'Open Monitor',
       secondaryAction: 'Search Issuer',
@@ -191,23 +198,23 @@ function screenFocus(view: string) {
     documents: sourceManagementFocus,
     profiles: sourceManagementFocus,
     library: {
-      eyebrow: 'Reports',
-      title: 'Which workspace should continue?',
-      description: 'Return to saved issuers, reports, versions, and reading-room documents without starting over.',
+      eyebrow: 'Workspace',
+      title: 'Reports and saved work',
+      description: 'Return to saved issuers, reports, versions, and reading-room documents.',
       primaryAction: 'Open Saved Work',
       secondaryAction: 'Search Issuer',
     },
     sources: sourceManagementFocus,
     reading: {
-      eyebrow: 'Editor',
-      title: 'What report text needs review?',
-      description: 'Edit the work product, add reviewer notes, and preserve comments before export.',
+      eyebrow: 'Reading Room',
+      title: 'Read and edit the report',
+      description: 'Review the current text, make edits, annotate, and export.',
       primaryAction: 'Back to Search',
       secondaryAction: 'Open Reports',
     },
     workflows: {
-      eyebrow: 'Templates',
-      title: 'Which repeatable workflow should run?',
+      eyebrow: 'Supervisor',
+      title: 'Workflow templates',
       description: 'Choose a monitoring, diligence, or memo workflow and keep raw logs behind the workflow result.',
       primaryAction: 'Run Workflow',
       secondaryAction: 'Search Issuer',
@@ -219,6 +226,7 @@ function screenFocus(view: string) {
 
 export default function HomePage() {
   const [view, setView] = useState('search');
+  const [experienceMode, setExperienceMode] = useState<'reader' | 'supervisor'>('reader');
   const [sourceManagementTab, setSourceManagementTab] = useState<SourceManagementTab>('documents');
   const [intakeCollapsed, setIntakeCollapsed] = useState(false);
   const [query, setQuery] = useState('LADWP');
@@ -318,12 +326,12 @@ export default function HomePage() {
   }
 
   function navigateWorkspace(nextView: string) {
-    if (nextView === 'developments' && !workspaceFeatures.dashboardView) {
+    if (nextView === 'developments' && (!workspaceFeatures.dashboardView || experienceMode !== 'supervisor')) {
       setView('search');
       return;
     }
 
-    if (nextView === 'workflows' && !workspaceFeatures.workflowCenterView) {
+    if (nextView === 'workflows' && (!workspaceFeatures.workflowCenterView || experienceMode !== 'supervisor')) {
       setView('search');
       return;
     }
@@ -936,6 +944,10 @@ export default function HomePage() {
     if (storedFavorites) {
       setFavorites(JSON.parse(storedFavorites));
     }
+    const storedExperienceMode = window.localStorage.getItem(STORAGE_KEYS.experienceMode);
+    if (storedExperienceMode === 'reader' || storedExperienceMode === 'supervisor') {
+      setExperienceMode(storedExperienceMode);
+    }
     const storedTheme = window.localStorage.getItem('civic-ledger-theme');
     if (storedTheme === 'dark' || storedTheme === 'light') {
       setTheme(storedTheme);
@@ -979,6 +991,18 @@ export default function HomePage() {
     if (!storageReady) return;
     window.localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites));
   }, [favorites, storageReady]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    window.localStorage.setItem(STORAGE_KEYS.experienceMode, experienceMode);
+    if (experienceMode === 'reader') {
+      setSourceManagementTab('documents');
+      if (view === 'developments' || view === 'workflows') {
+        setView('search');
+      }
+      setIntakeCollapsed(false);
+    }
+  }, [experienceMode, storageReady, view]);
 
   useEffect(() => {
     if (!storageReady) return;
@@ -1032,11 +1056,15 @@ export default function HomePage() {
   const activeReportPinned = Boolean(detail && generatedReport && isFavorite('report', activeReportTitle, detail.id));
   const activeDocumentPinned = Boolean(detail && isFavorite('document', activeDocumentTitle, detail.id));
   const isBusy = isResearching || isGeneratingReport;
-  const focus = screenFocus(view);
+  const focus = screenFocus(view, experienceMode);
   const isSourceManagementView = view === 'source-management' || view === 'documents' || view === 'profiles' || view === 'sources';
+  const activeSourceManagementTab = experienceMode === 'supervisor' ? sourceManagementTab : 'documents';
+  const visibleSourceManagementTabs = experienceMode === 'supervisor'
+    ? sourceManagementTabs
+    : sourceManagementTabs.filter((item) => item.id === 'documents');
 
   return (
-    <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''}`}>
+    <div className={`app-shell mode-${experienceMode} ${theme === 'dark' ? 'theme-dark' : ''}`}>
       <a href="#main-workspace" className="skip-link">Skip to workspace</a>
       {isBusy && (
         <div className="global-loading" role="status" aria-live="polite">
@@ -1045,8 +1073,10 @@ export default function HomePage() {
         </div>
       )}
       <Sidebar
-        current={isSourceManagementView ? 'source-management' : view}
+        current={isSourceManagementView ? activeSourceManagementTab : view}
+        experienceMode={experienceMode}
         onChange={navigateWorkspace}
+        onExperienceModeChange={setExperienceMode}
         savedRecords={savedRecords}
         recentWorkspaces={recentWorkspaces}
         favorites={favorites}
@@ -1114,8 +1144,9 @@ export default function HomePage() {
         </header>
 
         {view === 'search' && (
-          <section className={`workspace-grid ${intakeCollapsed ? 'intake-collapsed' : ''}`}>
+          <section className={`workspace-grid ${experienceMode === 'reader' ? 'reader-workspace-grid' : ''} ${intakeCollapsed ? 'intake-collapsed' : ''}`}>
             <SearchPanel
+              experienceMode={experienceMode}
               query={query}
               topic={topic}
               source={source}
@@ -1144,6 +1175,7 @@ export default function HomePage() {
               onToggleCollapse={() => setIntakeCollapsed((collapsed) => !collapsed)}
             />
             <DetailPanel
+              experienceMode={experienceMode}
               detail={detail}
               reportTemplate={reportTemplate}
               generatedReport={generatedReport}
@@ -1219,29 +1251,30 @@ export default function HomePage() {
         {isSourceManagementView && (
           <section className="source-management-page" aria-label="Source management">
             <div className="source-management-tabs" role="tablist" aria-label="Source management sections">
-              {sourceManagementTabs.map((item) => (
+              {visibleSourceManagementTabs.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   role="tab"
-                  aria-selected={sourceManagementTab === item.id}
-                  className={sourceManagementTab === item.id ? 'active' : ''}
+                  aria-selected={activeSourceManagementTab === item.id}
+                  className={activeSourceManagementTab === item.id ? 'active' : ''}
                   onClick={() => setSourceManagementTab(item.id)}
                 >
                   <strong>{item.label}</strong>
-                  <span>{item.description}</span>
+                  {experienceMode === 'supervisor' && <span>{item.description}</span>}
                 </button>
               ))}
             </div>
 
-            {sourceManagementTab === 'documents' && (
+            {activeSourceManagementTab === 'documents' && (
               <DocumentIntakePanel
+                experienceMode={experienceMode}
                 onOpenReading={openParsedDocumentReading}
                 onWorkflowReady={(workflow) => applyDocumentWorkflow(workflow, false)}
                 onOpenWorkflow={(workflow) => applyDocumentWorkflow(workflow, true)}
               />
             )}
-            {sourceManagementTab === 'profiles' && (
+            {activeSourceManagementTab === 'profiles' && (
               <IssuerProfilesPanel
                 profiles={issuerProfiles}
                 savedRecords={savedRecords}
@@ -1249,7 +1282,7 @@ export default function HomePage() {
                 onSaveProfile={saveIssuerProfile}
               />
             )}
-            {sourceManagementTab === 'sources' && (
+            {activeSourceManagementTab === 'sources' && (
               <SourcesPanel
                 items={sources}
                 detail={detail}

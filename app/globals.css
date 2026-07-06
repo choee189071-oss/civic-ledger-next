@@ -273,6 +273,36 @@ h3 {
   text-transform: uppercase;
 }
 
+.mode-switch {
+  background: var(--color-subtle);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 3px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+}
+
+.mode-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 780;
+  min-height: 32px;
+}
+
+.mode-switch button.active {
+  background: var(--color-page);
+  box-shadow: var(--shadow);
+  color: var(--color-primary-dark);
+}
+
+.supervisor-tools-section {
+  margin-top: auto;
+}
+
 .section-heading,
 .panel-heading,
 .result-topline,
@@ -549,6 +579,66 @@ h3 {
   grid-template-columns: 92px minmax(0, 1fr);
 }
 
+.reader-workspace-grid {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+}
+
+.reader-query-panel {
+  gap: 16px;
+}
+
+.reader-query-panel .searchbox {
+  grid-template-columns: minmax(0, 1fr) 44px;
+}
+
+.reader-query-panel .searchbox .field-label {
+  grid-column: 1 / -1;
+}
+
+.reader-query-panel .segmented-control {
+  margin-top: 2px;
+}
+
+.reader-answer-panel .issuer-entry-panel {
+  gap: 16px;
+}
+
+.reader-answer-panel .issuer-entry-meta,
+.reader-answer-panel .confidence-badge,
+.reader-answer-panel .confidence-explanation {
+  display: none;
+}
+
+.reader-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reader-answer-panel .structured-answer-grid {
+  grid-template-columns: 1fr;
+}
+
+.reader-answer-panel .structured-answer-grid article {
+  padding: 18px;
+}
+
+.reader-answer-panel .structured-answer-grid article span {
+  font-size: 12px;
+}
+
+.mode-reader .issuer-result-card .meta,
+.mode-reader .issuer-result-card .issuer-field-label,
+.mode-reader .issuer-result-card .coverage-badge,
+.mode-reader .issuer-result-card .issuer-snapshot-grid,
+.mode-reader .issuer-result-card .result-quick-actions button:not(:first-child) {
+  display: none;
+}
+
+.mode-reader .issuer-result-card {
+  gap: 12px;
+}
+
 .query-panel-collapsed {
   align-content: start;
   gap: 14px;
@@ -651,6 +741,11 @@ h3 {
   background: var(--color-page);
   box-shadow: var(--shadow);
   color: var(--color-primary-dark);
+}
+
+.mode-reader .source-management-tabs {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 420px;
 }
 
 .workspace-panel,
@@ -2906,9 +3001,9 @@ h3 {
 
 .reading-desk {
   margin: 0 auto;
-  max-width: 1320px;
+  max-width: 1500px;
   min-height: calc(100vh - 132px);
-  padding: 22px;
+  padding: 18px;
   width: 100%;
 }
 
@@ -2920,9 +3015,9 @@ h3 {
   display: grid;
   gap: 22px;
   margin: 0 auto;
-  max-width: 900px;
+  max-width: 920px;
   min-height: 920px;
-  padding: 54px 62px;
+  padding: 60px 68px;
   width: 100%;
 }
 
@@ -2930,7 +3025,8 @@ h3 {
   align-items: start;
   display: grid;
   gap: 18px;
-  grid-template-columns: 220px minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-columns: minmax(150px, 180px) minmax(0, 920px) minmax(220px, 280px);
+  justify-content: center;
 }
 
 .reading-document {
@@ -3033,6 +3129,18 @@ h3 {
   max-height: calc(100vh - 170px);
   overflow: auto;
   padding: 14px;
+}
+
+.reader-document-intake .document-intake-grid {
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+}
+
+.reader-document-intake .workflow-config-panel {
+  align-content: start;
+}
+
+.reader-document-intake .empty-document-state {
+  min-height: 280px;
 }
 
 .annotation-panel.active {

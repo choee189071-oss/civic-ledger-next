@@ -2,7 +2,9 @@ import { workspaceFeatures } from '../../lib/workspace-features';
 
 type Props = {
   current: string;
+  experienceMode: 'reader' | 'supervisor';
   onChange: (view: string) => void;
+  onExperienceModeChange: (mode: 'reader' | 'supervisor') => void;
   savedRecords: any[];
   recentWorkspaces: any[];
   favorites: any[];
@@ -12,7 +14,9 @@ type Props = {
 
 export function Sidebar({
   current,
+  experienceMode,
   onChange,
+  onExperienceModeChange,
   savedRecords,
   recentWorkspaces,
   favorites,
@@ -20,14 +24,24 @@ export function Sidebar({
   onOpenFavorite,
 }: Props) {
   const primaryViews = [
-    { id: 'search', label: 'Search', icon: '⌕' },
-    ...(workspaceFeatures.dashboardView ? [{ id: 'developments', label: 'Dashboard', icon: '↗' }] : []),
-    { id: 'source-management', label: 'Source Management', icon: '▧' },
-    { id: 'library', label: 'Reports', icon: '▤' },
+    { id: 'search', label: 'Research', icon: '⌕' },
   ];
 
   const workspaceViews = [
-    { id: 'reading', label: 'Editor', icon: '□' },
+    { id: 'reading', label: 'Reading Room', icon: '□' },
+    { id: 'library', label: 'Reports', icon: '▤' },
+  ];
+
+  const sourceViews = [
+    { id: 'documents', label: 'Important Files', icon: '▧' },
+    ...(experienceMode === 'supervisor' ? [
+      { id: 'profiles', label: 'Issuer Profiles', icon: '◇' },
+      { id: 'sources', label: 'Source List', icon: '☷' },
+    ] : []),
+  ];
+
+  const supervisorViews = [
+    ...(workspaceFeatures.dashboardView ? [{ id: 'developments', label: 'Dashboard', icon: '↗' }] : []),
     ...(workspaceFeatures.workflowCenterView ? [{ id: 'workflows', label: 'Templates', icon: '▦' }] : []),
   ];
 
@@ -39,6 +53,27 @@ export function Sidebar({
           <strong>Civic Ledger</strong>
           <div className="muted small">Municipal credit research</div>
         </div>
+      </div>
+
+      <div className="mode-switch" role="tablist" aria-label="Workspace mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={experienceMode === 'reader'}
+          className={experienceMode === 'reader' ? 'active' : ''}
+          onClick={() => onExperienceModeChange('reader')}
+        >
+          Reader
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={experienceMode === 'supervisor'}
+          className={experienceMode === 'supervisor' ? 'active' : ''}
+          onClick={() => onExperienceModeChange('supervisor')}
+        >
+          Supervisor
+        </button>
       </div>
 
       <nav className="nav">
@@ -61,6 +96,22 @@ export function Sidebar({
             <button
               key={v.id}
               className={current === v.id ? 'active' : ''}
+              onClick={() => onChange(v.id)}
+            >
+              <span>{v.icon}</span>
+              {v.label}
+            </button>
+          ))}
+        </nav>
+      </section>
+
+      <section className="sidebar-section compact">
+        <div className="sidebar-label">Source Management</div>
+        <nav className="nav secondary-nav">
+          {sourceViews.map((v) => (
+            <button
+              key={v.id}
+              className={current === v.id || (current === 'source-management' && v.id === 'documents') ? 'active' : ''}
               onClick={() => onChange(v.id)}
             >
               <span>{v.icon}</span>
@@ -132,6 +183,24 @@ export function Sidebar({
           ))}
         </div>
       </section>
+
+      {experienceMode === 'supervisor' && supervisorViews.length > 0 && (
+        <section className="sidebar-section compact supervisor-tools-section">
+          <div className="sidebar-label">Supervisor Tools</div>
+          <nav className="nav secondary-nav">
+            {supervisorViews.map((v) => (
+              <button
+                key={v.id}
+                className={current === v.id ? 'active' : ''}
+                onClick={() => onChange(v.id)}
+              >
+                <span>{v.icon}</span>
+                {v.label}
+              </button>
+            ))}
+          </nav>
+        </section>
+      )}
     </aside>
   );
 }

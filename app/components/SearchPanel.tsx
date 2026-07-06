@@ -26,6 +26,7 @@ type Result = {
 };
 
 type Props = {
+  experienceMode?: 'reader' | 'supervisor';
   query: string;
   topic: string;
   source: string;
@@ -357,6 +358,7 @@ function issuerSnapshotFor(item: Result) {
 
 export function SearchPanel(props: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const isReaderMode = props.experienceMode !== 'supervisor';
   const universalSearch = parseUniversalSearchQuery(props.query);
   const visibleFacets = universalSearch.facets.slice(0, 8);
   const selectedResearchTypeId = researchTypeIdFor(props.promptMode, props.reportTemplate);
@@ -377,7 +379,7 @@ export function SearchPanel(props: Props) {
     props.onCustomAngle(next.customAngle);
   }
 
-  if (props.collapsed) {
+  if (props.collapsed && !isReaderMode) {
     return (
       <section className="workspace-panel query-panel query-panel-collapsed" aria-label="Research intake collapsed">
         <button
@@ -408,34 +410,36 @@ export function SearchPanel(props: Props) {
   }
 
   return (
-    <section className="workspace-panel query-panel">
+    <section className={`workspace-panel query-panel ${isReaderMode ? 'reader-query-panel' : ''}`}>
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Ask</p>
-          <h2>Research intake</h2>
+          <p className="eyebrow">{isReaderMode ? 'Research' : 'Ask'}</p>
+          <h2>{isReaderMode ? 'Start research' : 'Research intake'}</h2>
         </div>
         <div className="panel-heading-actions">
-          <button
-            className="intake-resize-button"
-            type="button"
-            aria-label="Collapse research intake"
-            title="Collapse research intake"
-            onClick={props.onToggleCollapse}
-          >
-            ⇤
-          </button>
+          {!isReaderMode && (
+            <button
+              className="intake-resize-button"
+              type="button"
+              aria-label="Collapse research intake"
+              title="Collapse research intake"
+              onClick={props.onToggleCollapse}
+            >
+              ⇤
+            </button>
+          )}
           <span className="count">{props.items.length}</span>
         </div>
       </div>
 
       <div className="searchbox">
-        <label className="field-label" htmlFor="issuer-search">Universal Search</label>
+        <label className="field-label" htmlFor="issuer-search">{isReaderMode ? 'Issuer or question' : 'Universal Search'}</label>
         <input
           id="issuer-search"
           value={props.query}
           onChange={(e) => props.onQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && props.onSearch()}
-          placeholder="Issuer, alias, CUSIP, ticker, sector, bond type, state, or natural language"
+          placeholder={isReaderMode ? 'Search an issuer, sector, bond, or question' : 'Issuer, alias, CUSIP, ticker, sector, bond type, state, or natural language'}
         />
         <button
           className="icon-button primary"
@@ -451,18 +455,18 @@ export function SearchPanel(props: Props) {
         <div className="loading-card" role="status" aria-live="polite">
           <span className="loading-spinner" />
           <div>
-            <strong>Building research package</strong>
-            <p>Checking live sources, document coverage, evidence quality, and memo-ready findings.</p>
+            <strong>{isReaderMode ? 'Researching' : 'Building research package'}</strong>
+            <p>{isReaderMode ? 'Gathering current public information and preparing a readable answer.' : 'Checking live sources, document coverage, evidence quality, and memo-ready findings.'}</p>
           </div>
         </div>
       )}
-      <div className="shortcut-strip" aria-label="Keyboard shortcuts">
+      {!isReaderMode && <div className="shortcut-strip" aria-label="Keyboard shortcuts">
         <span><kbd>/</kbd> Search</span>
         <span><kbd>Ctrl</kbd><kbd>K</kbd> Quick Search</span>
         <span><kbd>⌘</kbd><kbd>Enter</kbd> Run Research</span>
-      </div>
+      </div>}
 
-      <details className="progressive-section compact-disclosure">
+      {!isReaderMode && <details className="progressive-section compact-disclosure">
         <summary>
           <div>
             <span>Secondary</span>
@@ -521,16 +525,17 @@ export function SearchPanel(props: Props) {
       </div>
 
       </details>
+      }
 
       {props.researchError && (
         <div className="error-banner" role="alert">
-          <strong>Research could not complete.</strong>
+          <strong>{isReaderMode ? 'Research could not complete.' : 'Research could not complete.'}</strong>
           <span>{props.researchError}</span>
-          <em>Try a broader issuer name, upload the source PDF, or check API keys before rerunning.</em>
+          {!isReaderMode && <em>Try a broader issuer name, upload the source PDF, or check API keys before rerunning.</em>}
         </div>
       )}
 
-      <div className="prompt-builder">
+      {!isReaderMode && <div className="prompt-builder">
         <label>
           Research Type
           <select value={selectedResearchTypeId} onChange={(e) => applyResearchType(e.target.value)}>
@@ -614,6 +619,7 @@ export function SearchPanel(props: Props) {
           </div>
         )}
       </div>
+      }
 
       <div className="segmented-control">
         {[

@@ -73,6 +73,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
   const [annotationNote, setAnnotationNote] = useState('');
   const content = (item?.body || ['Select a result and open reading mode.']).join('\n\n');
   const title = item?.title || 'Reading room';
+  const displayTitle = title.replace(/^Reading:\s*/i, '');
   const outline = documentOutline(content);
 
   function addAnnotation() {
@@ -146,9 +147,9 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
     <section className="full-page-panel reading-desk">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Reading</p>
-          <h2>{title}</h2>
-          <p className="muted small">Review, edit, annotate, and export the working file with notes preserved.</p>
+          <p className="eyebrow">Reading Room</p>
+          <h2>{displayTitle}</h2>
+          <p className="muted small">Read, edit, annotate, and export the current report.</p>
         </div>
         <div className="reading-toolbar">
           {[
@@ -164,25 +165,6 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
               {label}
             </button>
           ))}
-        </div>
-      </div>
-
-      <div className="reading-status-strip">
-        <div>
-          <span>Mode</span>
-          <strong>{mode}</strong>
-        </div>
-        <div>
-          <span>Sections</span>
-          <strong>{outline.length}</strong>
-        </div>
-        <div>
-          <span>Annotations</span>
-          <strong>{annotations.length}</strong>
-        </div>
-        <div>
-          <span>Export</span>
-          <strong>MD / PDF / DOCX</strong>
         </div>
       </div>
 
@@ -216,7 +198,7 @@ export function ReadingPanel({ item, annotations, onUpdateContent, onAddAnnotati
             <div className="reading-body">
               <div className="document-page-label">
                 <span>Working draft</span>
-                <strong>{title}</strong>
+                <strong>{displayTitle}</strong>
               </div>
               <FormattedReport content={content} />
             </div>

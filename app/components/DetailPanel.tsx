@@ -15,6 +15,7 @@ import { buildStructuredAnswer, type StructuredAnswer } from '../../lib/ai-exper
 import { workspaceFeatures } from '../../lib/workspace-features';
 
 type Props = {
+  experienceMode?: 'reader' | 'supervisor';
   detail: any;
   reportTemplate: string;
   generatedReport: any | null;
@@ -821,6 +822,7 @@ function debtDashboardMetrics(dashboard: IssuerDashboard) {
 }
 
 export function DetailPanel({
+  experienceMode = 'reader',
   detail,
   reportTemplate,
   generatedReport,
@@ -855,26 +857,41 @@ export function DetailPanel({
     note?: string;
   }>>({});
 
+  const isReaderMode = experienceMode !== 'supervisor';
+  const visibleWorkflowTabs = isReaderMode
+    ? [
+      ['discovery', 'Answer'],
+      ['report', 'Report'],
+      ['export', 'Export'],
+    ]
+    : workflowTabs;
+
   if (!detail) {
     return (
-      <section className="workspace-panel answer-panel empty-state">
-        <p className="eyebrow">Workflow</p>
-        <h2>Research workflow</h2>
-        <p className="muted">Search an issuer or upload a document to create a reusable research workspace.</p>
-        <div className="empty-state-grid" aria-label="Research workflow acceptance steps">
-          <div>
-            <strong>1. Find documents</strong>
-            <span>ACFR, OS/POS, EMMA filings, ratings, budget, board packets.</span>
+      <section className={`workspace-panel answer-panel empty-state ${isReaderMode ? 'reader-answer-panel' : ''}`}>
+        <p className="eyebrow">{isReaderMode ? 'Reading' : 'Workflow'}</p>
+        <h2>{isReaderMode ? 'Start with a research question.' : 'Research workflow'}</h2>
+        <p className="muted">
+          {isReaderMode
+            ? 'Search an issuer to create a clean answer and reading workspace.'
+            : 'Search an issuer or upload a document to create a reusable research workspace.'}
+        </p>
+        {!isReaderMode && (
+          <div className="empty-state-grid" aria-label="Research workflow acceptance steps">
+            <div>
+              <strong>1. Find documents</strong>
+              <span>ACFR, OS/POS, EMMA filings, ratings, budget, board packets.</span>
+            </div>
+            <div>
+              <strong>2. Diagnose coverage</strong>
+              <span>See missing documents, failed retrieval paths, source tier, and confidence.</span>
+            </div>
+            <div>
+              <strong>3. Generate work product</strong>
+              <span>Create a professional memo with evidence appendix and citations.</span>
+            </div>
           </div>
-          <div>
-            <strong>2. Diagnose coverage</strong>
-            <span>See missing documents, failed retrieval paths, source tier, and confidence.</span>
-          </div>
-          <div>
-            <strong>3. Generate work product</strong>
-            <span>Create a professional memo with evidence appendix and citations.</span>
-          </div>
-        </div>
+        )}
       </section>
     );
   }
@@ -1009,25 +1026,27 @@ export function DetailPanel({
   }
 
   return (
-    <section className="workspace-panel answer-panel">
+    <section className={`workspace-panel answer-panel ${isReaderMode ? 'reader-answer-panel' : ''}`}>
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Workflow</p>
+          <p className="eyebrow">{isReaderMode ? 'Research result' : 'Workflow'}</p>
           <h2>{detail.title}</h2>
         </div>
-        <label className="status-select">
-          <span>Status</span>
-          <select value={runStatus} onChange={(event) => onRunStatusChange(event.target.value)}>
-            {runStatuses.map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
-        </label>
+        {!isReaderMode && (
+          <label className="status-select">
+            <span>Status</span>
+            <select value={runStatus} onChange={(event) => onRunStatusChange(event.target.value)}>
+              {runStatuses.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <section className="issuer-entry-panel">
         <div className="issuer-entry-summary">
-          <p className="eyebrow">Issuer workspace</p>
+          <p className="eyebrow">{isReaderMode ? 'Current answer' : 'Issuer workspace'}</p>
           <h3>{detail.title}</h3>
           <p>{detail.summary}</p>
           <div className="record-meta issuer-entry-meta">
@@ -1037,6 +1056,15 @@ export function DetailPanel({
           </div>
         </div>
 
+        {isReaderMode ? (
+          <div className="reader-result-actions">
+            <button className="button-primary" onClick={onOpenReading}>Open Reading Room</button>
+            <button className="button-secondary" onClick={onGenerateReport} disabled={isGeneratingReport}>
+              {isGeneratingReport ? 'Generating...' : generatedReport ? 'Regenerate Report' : 'Generate Report'}
+            </button>
+            <button className="button-secondary" onClick={onSave}>{isSaved ? 'Saved' : 'Save'}</button>
+          </div>
+        ) : (
         <div className="issuer-entry-grid">
           <article className="issuer-entry-card coverage-card">
             <div>
@@ -1091,7 +1119,7 @@ export function DetailPanel({
             <div className="quick-actions-stack">
               <button className="button-primary" onClick={() => setActiveTab('discovery')}>Review Evidence</button>
               <button className="button-secondary" onClick={() => setActiveTab('report')}>Draft Report</button>
-              <button className="button-secondary" onClick={onOpenReading}>Open Editor</button>
+              <button className="button-secondary" onClick={onOpenReading}>Open Reading Room</button>
               <button className="button-secondary" onClick={onSave}>{isSaved ? 'Saved to Library' : 'Save Workspace'}</button>
               <button className="button-secondary pin-button" onClick={onToggleIssuerPin}>
                 {isIssuerPinned ? 'Issuer Pinned' : 'Pin Issuer'}
@@ -1105,6 +1133,7 @@ export function DetailPanel({
             </div>
           </article>
         </div>
+        )}
       </section>
 
       {detail.financeFocused && detail.coreFinanceDocumentsFound === false && (
@@ -1114,7 +1143,7 @@ export function DetailPanel({
       )}
 
       <div className="workflow-tabs">
-        {workflowTabs.map(([id, label]) => (
+        {visibleWorkflowTabs.map(([id, label]) => (
           <button
             key={id}
             className={activeTab === id ? 'active' : ''}
@@ -1141,7 +1170,7 @@ export function DetailPanel({
             <div className="section-heading">
               <div>
                 <h3>Structured answer</h3>
-                <p className="muted small">Short answer format for review: Summary, Analysis, Evidence, Recommendations.</p>
+                  {!isReaderMode && <p className="muted small">Short answer format for review: Summary, Analysis, Evidence, Recommendations.</p>}
               </div>
               <span className={`confidence-badge ${structuredAnswer.confidence.level.toLowerCase()}`}>
                 {structuredAnswer.confidence.level}
@@ -1177,7 +1206,7 @@ export function DetailPanel({
               <span>Confidence explanation</span>
               <strong>{structuredAnswer.confidence.explanation}</strong>
             </div>
-            <div className="follow-up-panel">
+            {!isReaderMode && <div className="follow-up-panel">
               <div className="section-heading">
                 <div>
                   <h4>Suggested follow-up questions</h4>
@@ -1191,10 +1220,10 @@ export function DetailPanel({
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
           </section>
 
-          {(outputEligibility || sourceCoverageMatrix.length > 0 || uploadQueue.length > 0 || openAiSourceIntelligence) && (
+          {!isReaderMode && (outputEligibility || sourceCoverageMatrix.length > 0 || uploadQueue.length > 0 || openAiSourceIntelligence) && (
             <section className="answer-section evidence-command">
               <div className="section-heading">
                 <div>
@@ -1274,7 +1303,7 @@ export function DetailPanel({
             </section>
           )}
 
-          <details className="progressive-section secondary-disclosure">
+          {!isReaderMode && <details className="progressive-section secondary-disclosure">
             <summary>
               <div>
                 <span>Secondary</span>
@@ -1393,9 +1422,9 @@ export function DetailPanel({
             </div>
           </section>
 
-          </details>
+          </details>}
 
-          <details className="progressive-section secondary-disclosure">
+          {!isReaderMode && <details className="progressive-section secondary-disclosure">
             <summary>
               <div>
                 <span>Secondary</span>
@@ -1510,9 +1539,9 @@ export function DetailPanel({
             )}
           </section>
 
-          </details>
+          </details>}
 
-          <details className="progressive-section tertiary-disclosure">
+          {!isReaderMode && <details className="progressive-section tertiary-disclosure">
             <summary>
               <div>
                 <span>Tertiary</span>
@@ -1783,11 +1812,11 @@ export function DetailPanel({
             </section>
           )}
 
-          </details>
+          </details>}
         </>
       )}
 
-      {activeTab === 'dashboard' && (
+      {!isReaderMode && activeTab === 'dashboard' && (
         <>
           <section className="answer-section issuer-dashboard-section">
             <div className="section-heading">
@@ -1935,12 +1964,14 @@ export function DetailPanel({
         <section className="answer-section report-workflow">
           <div className="report-workflow-head">
             <div>
-              <h3>LLM writer</h3>
-              <p className="muted small">
-                Output type is controlled from the intake panel. Regenerate after changing it.
-              </p>
+              <h3>{isReaderMode ? 'Report' : 'LLM writer'}</h3>
+              {!isReaderMode && (
+                <p className="muted small">
+                  Output type is controlled from the intake panel. Regenerate after changing it.
+                </p>
+              )}
             </div>
-            <span className="status-pill">Layer 3</span>
+            {!isReaderMode && <span className="status-pill">Layer 3</span>}
           </div>
 
           <div className="report-controls">
@@ -1971,7 +2002,7 @@ export function DetailPanel({
               </div>
               <h3>{generatedReport.title}</h3>
 
-              <div className="report-ai-experience">
+              {!isReaderMode && <div className="report-ai-experience">
                 <div>
                   <span>AI Confidence</span>
                   <strong>{structuredAnswer.confidence.level}</strong>
@@ -1983,9 +2014,9 @@ export function DetailPanel({
                     <p key={`${question}-${index}`}>{question}</p>
                   ))}
                 </div>
-              </div>
+              </div>}
 
-              <div className="report-evidence-summary">
+              {!isReaderMode && <div className="report-evidence-summary">
                 <div>
                   <span>Evidence Coverage</span>
                   <strong>{evidenceEngine.coveragePercent}%</strong>
@@ -2002,9 +2033,9 @@ export function DetailPanel({
                   <span>Missing Evidence</span>
                   <strong>{evidenceEngine.missingStatements}</strong>
                 </div>
-              </div>
+              </div>}
 
-              {evidenceEngine.warning && (
+              {!isReaderMode && evidenceEngine.warning && (
                 <div className="missing-evidence-warning compact-warning">
                   <div>
                     <p className="eyebrow">Evidence warning</p>
@@ -2017,9 +2048,9 @@ export function DetailPanel({
                 <button className="button-secondary" onClick={() => setIsEditingReport((editing) => !editing)}>
                   {isEditingReport ? 'Preview Report' : 'Edit Report'}
                 </button>
-                <button className="button-secondary" onClick={onSaveReportVersion}>
+                {!isReaderMode && <button className="button-secondary" onClick={onSaveReportVersion}>
                   Save Version
-                </button>
+                </button>}
                 <button className="button-secondary" onClick={onOpenReading}>
                   Open in Reading Room
                 </button>
@@ -2035,7 +2066,7 @@ export function DetailPanel({
                 <FormattedReport content={generatedReport.content} evidenceEngine={evidenceEngine} />
               )}
 
-              <section className="section-regeneration">
+              {!isReaderMode && <section className="section-regeneration">
                 <div className="section-heading">
                   <div>
                     <h3>Section controls</h3>
@@ -2089,9 +2120,9 @@ export function DetailPanel({
                     </div>
                   ))}
                 </div>
-              </section>
+              </section>}
 
-              {reportVersions.length > 0 && (
+              {!isReaderMode && reportVersions.length > 0 && (
                 <section className="version-compare">
                   <div className="section-heading">
                     <div>

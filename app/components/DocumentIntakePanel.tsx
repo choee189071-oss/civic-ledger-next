@@ -8,6 +8,7 @@ import {
 } from '../../lib/public-finance-document-pipeline';
 
 type Props = {
+  experienceMode?: 'reader' | 'supervisor';
   onOpenReading: (item: { id: string; title: string; body: string[] }) => void;
   onWorkflowReady: (workflow: DocumentWorkflowPackage) => void;
   onOpenWorkflow: (workflow: DocumentWorkflowPackage) => void;
@@ -116,7 +117,7 @@ function markdownBundle(result: DocumentParseResult) {
   ].join('\n');
 }
 
-export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWorkflow }: Props) {
+export function DocumentIntakePanel({ experienceMode = 'reader', onOpenReading, onWorkflowReady, onOpenWorkflow }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
@@ -203,19 +204,22 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
   const selectedImportantFile = importantFileSlots.find((slot) => slot.type === documentType);
   const foundCount = result?.evidencePackage.findings.filter((finding) => finding.status === 'Found').length ?? 0;
   const missingCount = result?.evidencePackage.missingFields.length ?? 0;
+  const isReaderMode = experienceMode !== 'supervisor';
+  const resultTabs = isReaderMode ? ['evidence', 'markdown'] : ['evidence', 'markdown', 'json'];
+  const visibleActiveTab = isReaderMode && activeTab === 'json' ? 'evidence' : activeTab;
 
   return (
-    <section className="full-page-panel document-intake-page">
+    <section className={`full-page-panel document-intake-page ${isReaderMode ? 'reader-document-intake' : ''}`}>
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Source Management</p>
-          <h2>Important files</h2>
-          <p className="muted small">Upload or link the files that matter most, then convert them into structured public-finance evidence.</p>
+          <h2>{isReaderMode ? 'Add source file' : 'Important files'}</h2>
+          {!isReaderMode && <p className="muted small">Upload or link the files that matter most, then convert them into structured public-finance evidence.</p>}
         </div>
-        <span className="count">{result ? `${foundCount}/${result.evidencePackage.findings.length}` : '6 priority files'}</span>
+        {!isReaderMode && <span className="count">{result ? `${foundCount}/${result.evidencePackage.findings.length}` : '6 priority files'}</span>}
       </div>
 
-      <div className="important-file-slots" aria-label="Priority public finance file types">
+      {!isReaderMode && <div className="important-file-slots" aria-label="Priority public finance file types">
         {importantFileSlots.map((slot) => (
           <button
             key={slot.type}
@@ -228,18 +232,18 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
             <em>{slot.why}</em>
           </button>
         ))}
-      </div>
+      </div>}
 
       <div className="document-intake-grid">
         <section className="workflow-config-panel">
           <div className="section-heading">
             <div>
-              <h3>Add selected file</h3>
-              <p className="muted small">
+              <h3>{isReaderMode ? 'Upload or paste a PDF link' : 'Add selected file'}</h3>
+              {!isReaderMode && <p className="muted small">
                 {selectedImportantFile
                   ? `${selectedImportantFile.label}: ${selectedImportantFile.why}`
                   : 'For large ACFRs and official statements, a public PDF URL is usually more reliable than browser upload.'}
-              </p>
+              </p>}
             </div>
           </div>
 
@@ -288,14 +292,14 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
             </select>
           </label>
 
-          <label>
+          {!isReaderMode && <label>
             LlamaParse tier
             <select value={tier} onChange={(event) => setTier(event.target.value)}>
               {tierOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-          </label>
+          </label>}
 
           <button className="button-primary" onClick={runParse} disabled={isParsing}>
             {isParsing ? 'Parsing PDF...' : 'Parse PDF'}
@@ -303,18 +307,18 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
 
           {error && <div className="inline-error">{error}</div>}
 
-          <div className="source-list-section compact-note">
+          {!isReaderMode && <div className="source-list-section compact-note">
             <h3>What this extracts</h3>
             <p className="muted small">ACFR: MD&A, liquidity, debt, pensions/OPEB. OS/POS: pledge, debt service, covenants, ABT. EMMA annual report: filing period and covenant updates. Budget/CIP, board packets, and rate studies: forward-looking risks, authorizations, RFPs, and rate-path evidence.</p>
-          </div>
+          </div>}
         </section>
 
         <section className="workflow-run-panel">
           {!result ? (
             <div className="empty-document-state">
               <p className="eyebrow">Ready</p>
-              <h3>Turn core PDF evidence into workflow-ready material.</h3>
-              <p className="muted">The result will appear here as an evidence package, source list entry, credit memo draft, and reading-room document.</p>
+              <h3>{isReaderMode ? 'Parse a PDF into a readable source summary.' : 'Turn core PDF evidence into workflow-ready material.'}</h3>
+              {!isReaderMode && <p className="muted">The result will appear here as an evidence package, source list entry, credit memo draft, and reading-room document.</p>}
             </div>
           ) : (
             <>
@@ -326,13 +330,13 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
                 </div>
                 <div className="report-toolbar">
                   <button className="button-secondary" onClick={() => downloadText(markdownBundle(result), `${slug(result.title)}_evidence.md`, 'text/markdown;charset=utf-8')}>Download MD</button>
-                  <button className="button-secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), `${slug(result.title)}_evidence.json`, 'application/json;charset=utf-8')}>Download JSON</button>
+                  {!isReaderMode && <button className="button-secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), `${slug(result.title)}_evidence.json`, 'application/json;charset=utf-8')}>Download JSON</button>}
                   <button className="button-secondary" onClick={openParsedMarkdown}>Open Parsed Markdown</button>
                   <button className="button-primary" onClick={openReading}>Open Report in Reading</button>
                 </div>
               </div>
 
-              {workflowPackage && (
+              {!isReaderMode && workflowPackage && (
                 <section className="document-pipeline-card">
                   <div>
                     <p className="eyebrow">Document-to-Report Pipeline</p>
@@ -359,21 +363,21 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
                 </section>
               )}
 
-              <div className="document-score-strip">
+              {!isReaderMode && <div className="document-score-strip">
                 <span className="status-pill ready">{foundCount} found</span>
                 <span className={missingCount > 0 ? 'status-pill warning' : 'status-pill ready'}>{missingCount} missing</span>
                 <span className="status-pill">{result.evidencePackage.documentKind}</span>
-              </div>
+              </div>}
 
               <div className="report-tabs">
-                {['evidence', 'markdown', 'json'].map((tab) => (
-                  <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>
+                {resultTabs.map((tab) => (
+                  <button key={tab} className={visibleActiveTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>
                     {tab === 'evidence' ? 'Evidence Package' : tab === 'markdown' ? 'Parsed Markdown' : 'Raw JSON'}
                   </button>
                 ))}
               </div>
 
-              {activeTab === 'evidence' && (
+              {visibleActiveTab === 'evidence' && (
                 <div className="source-list document-evidence-list">
                   {result.evidencePackage.findings.map((finding) => (
                     <article key={finding.section} className="source-list-row">
@@ -391,11 +395,11 @@ export function DocumentIntakePanel({ onOpenReading, onWorkflowReady, onOpenWork
                 </div>
               )}
 
-              {activeTab === 'markdown' && (
+              {visibleActiveTab === 'markdown' && (
                 <pre className="document-output-pre">{result.markdown || 'No markdown returned.'}</pre>
               )}
 
-              {activeTab === 'json' && (
+              {visibleActiveTab === 'json' && (
                 <pre className="document-output-pre">{JSON.stringify(result, null, 2)}</pre>
               )}
             </>
