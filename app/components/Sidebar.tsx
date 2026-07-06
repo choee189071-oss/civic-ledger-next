@@ -28,7 +28,7 @@ export function Sidebar({
 
   const workspaceViews = [
     { id: 'reading', label: 'Editor', icon: '□' },
-    { id: 'workflows', label: 'Templates', icon: '▦' },
+    ...(workspaceFeatures.workflowCenterView ? [{ id: 'workflows', label: 'Templates', icon: '▦' }] : []),
   ];
 
   return (

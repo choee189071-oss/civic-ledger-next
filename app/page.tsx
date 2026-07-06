@@ -323,6 +323,11 @@ export default function HomePage() {
       return;
     }
 
+    if (nextView === 'workflows' && !workspaceFeatures.workflowCenterView) {
+      setView('search');
+      return;
+    }
+
     if (nextView === 'documents' || nextView === 'profiles' || nextView === 'sources') {
       openSourceManagement(nextView);
       return;
@@ -1204,7 +1209,7 @@ export default function HomePage() {
             onRunIssuerScan={startIssuerDevelopmentScan}
           />
         )}
-        {view === 'workflows' && (
+        {workspaceFeatures.workflowCenterView && view === 'workflows' && (
           <WorkflowCenterPanel
             savedRecords={savedRecords}
             issuerProfiles={issuerProfiles}
