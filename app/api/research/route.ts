@@ -1630,7 +1630,6 @@ async function buildOpenAiSourceIntelligence({
         },
       ],
       max_output_tokens: 1100,
-      temperature: 0.1,
     }),
   });
 
