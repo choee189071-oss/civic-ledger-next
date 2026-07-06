@@ -1222,6 +1222,7 @@ export default function HomePage() {
         {view === 'reading' && (
           <ReadingPanel
             item={reading}
+            experienceMode={experienceMode}
             annotations={readingAnnotations[readingKey(reading)] ?? []}
             onUpdateContent={updateReadingContent}
             onAddAnnotation={addReadingAnnotation}

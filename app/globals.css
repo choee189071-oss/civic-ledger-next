@@ -3029,6 +3029,16 @@ h3 {
   justify-content: center;
 }
 
+.reader-reading-desk {
+  max-width: 1760px;
+}
+
+.reader-reading-workspace {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .reading-document {
   min-width: 0;
 }
@@ -3129,6 +3139,42 @@ h3 {
   max-height: calc(100vh - 170px);
   overflow: auto;
   padding: 14px;
+}
+
+.reader-review-panel {
+  align-items: start;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, 520px);
+  max-height: none;
+  overflow: visible;
+  padding: 16px 18px;
+  position: static;
+}
+
+.reader-review-panel .annotation-composer {
+  grid-column: 1 / -1;
+}
+
+.reader-review-panel .annotation-list {
+  align-self: end;
+}
+
+.reader-review-panel .export-grid {
+  align-self: center;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.reader-reading-desk .reading-body {
+  max-width: none;
+  min-height: calc(100vh - 335px);
+  padding: 58px clamp(28px, 4vw, 76px);
+}
+
+.reader-reading-desk .formatted-report {
+  max-width: 980px;
+}
+
+.reader-reading-desk .reading-editor {
+  min-height: calc(100vh - 335px);
 }
 
 .reader-document-intake .document-intake-grid {
@@ -4229,6 +4275,14 @@ h3 {
   .issuer-browser {
     max-height: none;
     position: static;
+  }
+
+  .reader-review-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .reader-review-panel .export-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .workspace-kpis,
