@@ -62,36 +62,98 @@ type Props = {
   onToggleCollapse: () => void;
 };
 
-const promptModes = [
-  ['general-overview', 'General Overview'],
-  ['issuer-credit-profile', 'Issuer / Credit Profile'],
-  ['document-discovery', 'Document Discovery'],
-  ['debt-bond-research', 'Debt / Bond Research'],
-  ['financial-performance', 'Financial Performance'],
-  ['risk-news-monitoring', 'Risk / News Monitoring'],
-  ['peer-comparison', 'Peer Comparison'],
-  ['time-series-analysis', 'Time Series'],
-  ['covenant-tracking', 'Covenant Tracking'],
-  ['watchlist-monitoring', 'Watchlist / Monitoring'],
-  ['custom-prompt', 'Custom Prompt'],
-];
-
-const outputTypes = [
-  ['research-brief', 'Research Brief'],
-  ['credit-memo', 'Professional Credit Memo'],
-  ['investment-committee-memo', 'Investment Committee Memo'],
-  ['rating-committee-memo', 'Rating Committee Memo'],
-  ['document-inventory-report', 'Document Inventory Report'],
-  ['due-diligence-report', 'Due Diligence Report'],
-  ['board-briefing', 'Board Briefing'],
-  ['executive-summary', 'Executive Summary'],
-  ['risk-monitor', 'Risk Monitor'],
-  ['watchlist-monitor', 'Watchlist Monitor'],
-  ['peer-comparison-table', 'Peer Comparison Table'],
-  ['time-series-analysis', 'Time Series Analysis'],
-  ['covenant-tracking', 'Covenant Tracking'],
-  ['source-appendix', 'Source Appendix'],
-  ['custom-report', 'Custom Report'],
+const researchTypes = [
+  {
+    id: 'general-brief',
+    label: 'General Overview / Research Brief',
+    promptMode: 'general-overview',
+    reportTemplate: 'research-brief',
+    customAngle: '',
+  },
+  {
+    id: 'credit-memo',
+    label: 'Issuer Credit Profile / Credit Memo',
+    promptMode: 'issuer-credit-profile',
+    reportTemplate: 'credit-memo',
+    customAngle: '',
+  },
+  {
+    id: 'ic-memo',
+    label: 'Issuer Credit Profile / IC Memo',
+    promptMode: 'issuer-credit-profile',
+    reportTemplate: 'investment-committee-memo',
+    customAngle: 'Focus on relative value, peer context, source gaps, and next diligence checks.',
+  },
+  {
+    id: 'rating-committee',
+    label: 'Issuer Credit Profile / Rating Committee Memo',
+    promptMode: 'issuer-credit-profile',
+    reportTemplate: 'rating-committee-memo',
+    customAngle: '',
+  },
+  {
+    id: 'document-inventory',
+    label: 'Document Discovery / Inventory Report',
+    promptMode: 'document-discovery',
+    reportTemplate: 'document-inventory-report',
+    customAngle: '',
+  },
+  {
+    id: 'due-diligence',
+    label: 'Document Discovery / Due Diligence Report',
+    promptMode: 'document-discovery',
+    reportTemplate: 'due-diligence-report',
+    customAngle: '',
+  },
+  {
+    id: 'source-appendix',
+    label: 'Document Discovery / Source Appendix',
+    promptMode: 'document-discovery',
+    reportTemplate: 'source-appendix',
+    customAngle: '',
+  },
+  {
+    id: 'debt-research',
+    label: 'Debt Research / Credit Memo',
+    promptMode: 'debt-bond-research',
+    reportTemplate: 'credit-memo',
+    customAngle: '',
+  },
+  {
+    id: 'financial-trends',
+    label: 'Financial Performance / Time Series',
+    promptMode: 'financial-performance',
+    reportTemplate: 'time-series-analysis',
+    customAngle: '',
+  },
+  {
+    id: 'risk-monitor',
+    label: 'Risk Monitoring / Risk Monitor',
+    promptMode: 'risk-news-monitoring',
+    reportTemplate: 'risk-monitor',
+    customAngle: '',
+  },
+  {
+    id: 'peer-comparison',
+    label: 'Peer Comparison / Comparison Table',
+    promptMode: 'peer-comparison',
+    reportTemplate: 'peer-comparison-table',
+    customAngle: '',
+  },
+  {
+    id: 'covenant-tracking',
+    label: 'Covenant Tracking / Covenant Report',
+    promptMode: 'covenant-tracking',
+    reportTemplate: 'covenant-tracking',
+    customAngle: '',
+  },
+  {
+    id: 'custom-report',
+    label: 'Custom Prompt / Custom Report',
+    promptMode: 'custom-prompt',
+    reportTemplate: 'custom-report',
+    customAngle: '',
+  },
 ];
 
 const workflowOptionLabels = [
@@ -183,6 +245,19 @@ function sourceDate(source: Record<string, any>) {
     source.emmaFilingDate ||
     source.emma_filing_date,
     ''
+  );
+}
+
+function researchTypeIdFor(promptMode: string, reportTemplate: string) {
+  const exact = researchTypes.find((item) =>
+    item.promptMode === promptMode && item.reportTemplate === reportTemplate
+  );
+  if (exact) return exact.id;
+  if (promptMode === 'custom-prompt') return 'custom-report';
+  return (
+    researchTypes.find((item) => item.promptMode === promptMode)?.id ||
+    researchTypes.find((item) => item.reportTemplate === reportTemplate)?.id ||
+    researchTypes[0].id
   );
 }
 
@@ -284,6 +359,7 @@ export function SearchPanel(props: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const universalSearch = parseUniversalSearchQuery(props.query);
   const visibleFacets = universalSearch.facets.slice(0, 8);
+  const selectedResearchTypeId = researchTypeIdFor(props.promptMode, props.reportTemplate);
   const citations = [
     ...new Set(
       props.items.flatMap((item) =>
@@ -291,6 +367,15 @@ export function SearchPanel(props: Props) {
       )
     )
   ];
+
+  function applyResearchType(id: string) {
+    const next = researchTypes.find((item) => item.id === id);
+    if (!next) return;
+
+    props.onPromptMode(next.promptMode);
+    props.onReportTemplate(next.reportTemplate);
+    props.onCustomAngle(next.customAngle);
+  }
 
   if (props.collapsed) {
     return (
@@ -383,7 +468,7 @@ export function SearchPanel(props: Props) {
             <span>Secondary</span>
             <strong>Search interpretation and quick starts</strong>
           </div>
-          <em>Open to refine intent or choose a template.</em>
+          <em>Open to refine intent.</em>
         </summary>
 
       <div className="universal-search-panel">
@@ -447,10 +532,10 @@ export function SearchPanel(props: Props) {
 
       <div className="prompt-builder">
         <label>
-          Research Mode
-          <select value={props.promptMode} onChange={(e) => props.onPromptMode(e.target.value)}>
-            {promptModes.map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
+          Research Type
+          <select value={selectedResearchTypeId} onChange={(e) => applyResearchType(e.target.value)}>
+            {researchTypes.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
             ))}
           </select>
         </label>
@@ -466,15 +551,6 @@ export function SearchPanel(props: Props) {
             />
           </label>
         )}
-
-        <label>
-          Output Type
-          <select value={props.reportTemplate} onChange={(e) => props.onReportTemplate(e.target.value)}>
-            {outputTypes.map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
-            ))}
-          </select>
-        </label>
 
         <button
           className="advanced-toggle"
