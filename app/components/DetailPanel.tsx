@@ -198,7 +198,8 @@ function exportDashboardMarkdown(
   ).length;
   const tier1Count = sources.filter((source) => /tier\s*1|high/i.test(`${source.sourceTier ?? source.source_tier ?? ''}`)).length;
   const freshCount = sources.filter((source) => /3.?month|preferred/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
-  const fallbackCount = sources.filter((source) => /6.?month|fallback/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
+  const annualCount = sources.filter((source) => /annual|1.?year/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
+  const structuralCount = sources.filter((source) => /structural|3.?year/i.test(`${source.recencyWindow ?? source.recency_window ?? ''}`)).length;
   const manualCount = sources.filter((source) =>
     /manual|candidate|verify|unverified|missing|rejected/i.test(
       `${sourceStatuses[sourceKey(source)] ?? ''} ${source.status ?? ''} ${source.notes ?? ''}`
@@ -218,8 +219,9 @@ function exportDashboardMarkdown(
     `| Evidence confidence | ${evidenceEngine?.confidence ?? 'Not calculated'} |`,
     `| Statement citations | ${evidenceEngine ? `${evidenceEngine.citationCount} of ${evidenceEngine.totalStatements}` : 'Not calculated'} |`,
     `| Tier 1 / primary sources | ${tier1Count} candidate records |`,
-    `| Fresh 3-month evidence | ${freshCount} candidate records |`,
-    `| 6-month fallback evidence | ${fallbackCount} candidate records |`,
+    `| Quarterly evidence | ${freshCount} candidate records |`,
+    `| Annual evidence | ${annualCount} candidate records |`,
+    `| Structural 3-year context | ${structuralCount} candidate records |`,
     `| Manual verification / gaps | ${manualCount + missingCoverage} items |`,
     `| Generated at | ${mdCell(generatedReport?.generatedAt || detail.generatedAt || new Date().toISOString())} |`,
   ].join('\n');
@@ -419,6 +421,38 @@ function structuredAnswerMarkdown(answer: StructuredAnswer | null | undefined) {
   ].join('\n');
 }
 
+function sourceCoverageMarkdown(evidencePackage: any) {
+  const matrix = Array.isArray(evidencePackage?.source_coverage_matrix)
+    ? evidencePackage.source_coverage_matrix
+    : [];
+  const uploadQueue = Array.isArray(evidencePackage?.upload_queue)
+    ? evidencePackage.upload_queue
+    : [];
+  const eligibility = evidencePackage?.output_eligibility?.selected;
+
+  if (!matrix.length && !uploadQueue.length && !eligibility) return '';
+
+  return [
+    '## Source Coverage and Output Eligibility',
+    '',
+    eligibility ? `Selected output: ${eligibility.label} (${eligibility.status})` : '',
+    eligibility?.recommendation ? `Recommendation: ${eligibility.recommendation}` : '',
+    '',
+    matrix.length ? '| Evidence Area | Status | Output Status | Matched Source | Next Action |' : '',
+    matrix.length ? '|---|---|---|---|---|' : '',
+    ...matrix.map((row: any) => [
+      row.area,
+      row.status,
+      row.output_status,
+      row.matched_source?.title || 'Not found',
+      row.recommended_action,
+    ].map(mdCell)).map((row: string[]) => `| ${row.join(' | ')} |`),
+    '',
+    uploadQueue.length ? '### Upload Queue' : '',
+    ...uploadQueue.map((item: any) => `- ${item.upload_type}: ${item.why} Preferred parser tier: ${item.preferred_tier}.`),
+  ].filter((line) => line !== '').join('\n');
+}
+
 function markdownFor(
   detail: any,
   generatedReport: any | null,
@@ -442,6 +476,8 @@ function markdownFor(
     exportDashboardMarkdown(detail, generatedReport, evidencePackage, sourceStatuses, runStatus, reportTemplate, evidenceEngine),
     '',
     structuredAnswerMarkdown(structuredAnswer),
+    '',
+    sourceCoverageMarkdown(evidencePackage),
     '',
     researchWorkspaceMarkdown(researchWorkspace),
     '',
@@ -855,6 +891,14 @@ export function DetailPanel({
   const retrievalDiagnostics = retrievalDiagnosticsFor(detail, evidencePackage);
   const failureClassification = failureClassificationFor(detail, evidencePackage, documentDiagnostics, retrievalDiagnostics);
   const coverageRows = normalizeCoverageRows(evidencePackage?.coverage_dashboard ?? detail.coverageDashboard ?? []);
+  const sourceCoverageMatrix = Array.isArray(evidencePackage?.source_coverage_matrix)
+    ? evidencePackage.source_coverage_matrix
+    : [];
+  const outputEligibility = evidencePackage?.output_eligibility?.selected ?? null;
+  const uploadQueue = Array.isArray(evidencePackage?.upload_queue)
+    ? evidencePackage.upload_queue
+    : [];
+  const openAiSourceIntelligence = evidencePackage?.openai_source_intelligence ?? null;
   const coverageFoundCount = coverageRows.filter(coverageStatusIsFound).length;
   const coverageTotal = coverageRows.length;
   const coveragePercent = coverageTotal > 0 ? Math.round((coverageFoundCount / coverageTotal) * 100) : 0;
@@ -1149,6 +1193,86 @@ export function DetailPanel({
               </div>
             </div>
           </section>
+
+          {(outputEligibility || sourceCoverageMatrix.length > 0 || uploadQueue.length > 0 || openAiSourceIntelligence) && (
+            <section className="answer-section evidence-command">
+              <div className="section-heading">
+                <div>
+                  <h3>Source coverage and output eligibility</h3>
+                  <p className="muted small">Shows whether this research package is good enough for the selected output, and which documents should be uploaded for LlamaParse extraction.</p>
+                </div>
+                {outputEligibility && (
+                  <span className={`status-pill ${outputEligibility.status === 'Ready' ? 'ready' : 'warning'}`}>
+                    {outputEligibility.status}
+                  </span>
+                )}
+              </div>
+
+              {outputEligibility && (
+                <div className="evidence-metric-grid">
+                  <div>
+                    <span>Selected output</span>
+                    <strong>{outputEligibility.label}</strong>
+                    <p>{outputEligibility.recommendation}</p>
+                  </div>
+                  <div>
+                    <span>Missing required</span>
+                    <strong>{outputEligibility.missing_required_sources?.length ?? 0}</strong>
+                    <p>{(outputEligibility.missing_required_sources ?? []).join(', ') || 'No required gaps.'}</p>
+                  </div>
+                  <div>
+                    <span>Helpful missing</span>
+                    <strong>{outputEligibility.helpful_missing_sources?.length ?? 0}</strong>
+                    <p>{(outputEligibility.helpful_missing_sources ?? []).join(', ') || 'No helpful gaps.'}</p>
+                  </div>
+                  <div>
+                    <span>Manual verification</span>
+                    <strong>{outputEligibility.manual_verification_sources?.length ?? 0}</strong>
+                    <p>Critical sources may need PDF upload or direct analyst verification.</p>
+                  </div>
+                </div>
+              )}
+
+              {sourceCoverageMatrix.length > 0 && (
+                <div className="mini-table source-coverage-matrix">
+                  <div className="mini-table-row header">
+                    <span>Evidence Area</span>
+                    <span>Status</span>
+                    <span>Output</span>
+                    <span>Matched Source</span>
+                    <span>Next Action</span>
+                  </div>
+                  {sourceCoverageMatrix.map((row: any) => (
+                    <div key={row.key || row.area} className="mini-table-row">
+                      <span>{row.area}</span>
+                      <span>{row.status}</span>
+                      <span>{row.output_status}</span>
+                      <span>{row.matched_source?.title || 'Not found'}</span>
+                      <span>{row.recommended_action}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {uploadQueue.length > 0 && (
+                <div className="missing-evidence-list">
+                  <h4>Upload queue</h4>
+                  {uploadQueue.slice(0, 8).map((item: any, index: number) => (
+                    <p key={`${item.area || item.upload_type}-${index}`}>
+                      {item.upload_type}: {item.why} Preferred parser tier: {item.preferred_tier}.
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {openAiSourceIntelligence?.content && (
+                <div className="missing-evidence-list">
+                  <h4>OpenAI source intelligence QA</h4>
+                  <FormattedReport content={openAiSourceIntelligence.content} compact />
+                </div>
+              )}
+            </section>
+          )}
 
           <details className="progressive-section secondary-disclosure">
             <summary>

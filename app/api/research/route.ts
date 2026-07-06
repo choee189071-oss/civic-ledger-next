@@ -31,6 +31,7 @@ import { buildStructuredAnswer } from '../../../lib/ai-experience';
 import { searchUsaSpending, type UsaSpendingAward } from '../../../lib/usaspending-api';
 
 export const runtime = 'nodejs';
+export const maxDuration = 120;
 
 type SonarSearchResult = {
   title?: string;
@@ -47,6 +48,8 @@ type SonarSearchResult = {
   status?: string;
   notes?: string;
   recencyWindow?: string;
+  accessStatus?: string;
+  recommendedAction?: string;
 };
 
 type SonarResponse = {
@@ -65,6 +68,7 @@ type SonarResponse = {
 
 const SONAR_URL = 'https://api.perplexity.ai/v1/sonar';
 const SEARCH_URL = 'https://api.perplexity.ai/search';
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 const TIER1_DOMAINS = [
   'emma.msrb.org',
@@ -77,6 +81,19 @@ const TIER1_DOMAINS = [
   'kbra.com',
   'spglobal.com',
   'standardandpoors.com',
+];
+
+const CRITICAL_SOURCE_ACCESS_NOTES = [
+  {
+    domains: ['emma.msrb.org', 'msrb.org'],
+    label: 'EMMA / MSRB',
+    action: 'Open EMMA manually, download the OS/POS, annual report, continuing disclosure, or event notice, then upload it through Important Files for LlamaParse extraction.',
+  },
+  {
+    domains: ['moodys.com', 'fitchratings.com', 'krollbondratings.com', 'kbra.com', 'spglobal.com', 'standardandpoors.com'],
+    label: 'Rating agency',
+    action: 'Verify the public rating action/report directly on the rating-agency page, then upload the PDF or paste the public link if available.',
+  },
 ];
 
 const TIER2_DOMAINS = [
@@ -207,6 +224,20 @@ function hostMatches(host: string, domains: string[]) {
   });
 }
 
+function criticalSourceAccess(url?: string) {
+  const host = sourceHost(url);
+  if (!host) return null;
+
+  const match = CRITICAL_SOURCE_ACCESS_NOTES.find((item) => hostMatches(host, item.domains));
+  if (!match) return null;
+
+  return {
+    label: match.label,
+    status: 'Manual Verification Required',
+    action: match.action,
+  };
+}
+
 function sourceFacts(searchResults: SonarSearchResult[]) {
   return searchResults
     .filter((result) => result.title || result.snippet || result.url)
@@ -255,7 +286,7 @@ function normalizeWorkflowOptions(value: any) {
   };
 }
 
-function uniqueQueries(queries: string[], limit = 10) {
+function uniqueQueries(queries: string[], limit = 28) {
   const seen = new Set<string>();
   const next: string[] = [];
 
@@ -282,10 +313,13 @@ function officialSourceQueries(issuer: string, preferredSource: string, recencyS
   const allSourceQueries = [
     `${issuer} site:emma.msrb.org official statement continuing disclosure`,
     `${issuer} site:emma.msrb.org EMMA MSRB`,
+    `${issuer} site:emma.msrb.org annual report event notice CUSIP`,
     `${issuer} site:debtwatch.treasurer.ca.gov debt issuance bonds`,
     `${issuer} site:bythenumbers.sco.ca.gov financial data`,
     `${issuer} site:treasurer.ca.gov/cdiac debt issuance`,
     `${issuer} site:usaspending.gov federal grant award`,
+    `${issuer} investor relations bondholder debt audited financial statements`,
+    `${issuer} board agenda packet minutes bond resolution RFP municipal advisor bond counsel`,
   ];
   const sourceSpecific: Record<string, string[]> = {
     'EMMA / MSRB': [
@@ -332,6 +366,49 @@ function officialSourceQueries(issuer: string, preferredSource: string, recencyS
     : sourceSpecific[preferredSource] ?? [];
 
   return selected.map((query) => withRecency(query, recencyScope));
+}
+
+function facetValue(universalSearch: any, type: string) {
+  return universalSearch?.facets?.find((facet: any) => facet.type === type)?.value || '';
+}
+
+function buildSectorMarketQueries(issuer: string, promptMode: PromptMode, customAngle: string, recencyScope: RecencyScope, universalSearch: any) {
+  const sector = universalSearch?.primaryIssuer?.sector || facetValue(universalSearch, 'sector') || 'municipal public finance';
+  const state = universalSearch?.primaryIssuer?.state || facetValue(universalSearch, 'state') || 'United States';
+  const bondType = facetValue(universalSearch, 'bond_type') || universalSearch?.primaryIssuer?.bondTypes?.[0] || 'municipal bonds';
+  const issuerKeywords = Array.isArray(universalSearch?.primaryIssuer?.keywords)
+    ? universalSearch.primaryIssuer.keywords.slice(0, 4)
+    : [];
+  const issueContext = [sector, state, bondType, ...issuerKeywords].filter(Boolean).join(' ');
+  const monitoringContext = customAngle || PROMPT_MODE_OPTIONS[promptMode].description;
+
+  return uniqueQueries([
+    `${state} ${sector} municipal credit outlook rating action`,
+    `${state} ${sector} municipal bond issuance official statement`,
+    `${state} ${sector} board agenda budget capital improvement plan rate action`,
+    `${state} ${sector} public finance litigation labor pension OPEB cyber climate wildfire`,
+    `${state} ${sector} adopted budget state funding grants capital program`,
+    `${state} ${sector} CDIAC DebtWatch bond issuance`,
+    `${state} ${sector} site:treasurer.ca.gov/cdiac debt issuance official statement`,
+    `${state} ${sector} site:debtwatch.treasurer.ca.gov bonds debt issuance`,
+    `${state} ${sector} site:bythenumbers.sco.ca.gov revenue expenditure financial data`,
+    `${issueContext} Moody's S&P Fitch KBRA sector outlook rating methodology`,
+    `${issueContext} comparable municipal bonds spread yield MMD recent trades`,
+    `${issueContext} official statement continuing disclosure EMMA MSRB annual report`,
+    `${issueContext} rate covenant debt service coverage additional bonds test`,
+    `${issueContext} recent developments ${monitoringContext}`,
+  ].map((query) => withRecency(query, recencyScope)), 18);
+}
+
+function buildCriticalSourceManualQueries(issuer: string, recencyScope: RecencyScope) {
+  return uniqueQueries([
+    `${issuer} EMMA MSRB official statement continuing disclosure annual report CUSIP`,
+    `${issuer} EMMA event notice rating change tender default unscheduled draw`,
+    `${issuer} Moody's rating action outlook`,
+    `${issuer} S&P Global Ratings rating action outlook`,
+    `${issuer} Fitch Ratings rating action outlook`,
+    `${issuer} KBRA Kroll rating action outlook`,
+  ].map((query) => withRecency(query, recencyScope)), 10);
 }
 
 function knownOfficialSeedResults(issuer: string): SonarSearchResult[] {
@@ -529,7 +606,7 @@ function buildBaselineSourceQueries(issuer: string, preferredSource = 'all', rec
     ],
   };
 
-  return uniqueQueries(preferredSource === 'all' ? generalQueries : sourceSpecific[preferredSource] ?? generalQueries, 8);
+  return uniqueQueries(preferredSource === 'all' ? generalQueries : sourceSpecific[preferredSource] ?? generalQueries, 14);
 }
 
 function documentTypeFor(result: SonarSearchResult) {
@@ -704,6 +781,7 @@ function classifyResults(results: SonarSearchResult[], financeFocused: boolean, 
   const classified = results.map((result) => {
     const tier = classifySourceTier(result);
     const recencyWindow = sourceRecencyLabel(result, recencyScope);
+    const access = criticalSourceAccess(result.url);
 
     return {
       ...result,
@@ -711,9 +789,11 @@ function classifyResults(results: SonarSearchResult[], financeFocused: boolean, 
       sourceTierRank: tier.rank,
       sourceTierName: tier.name,
       documentType: tier.documentType,
-      status: result.status || 'Candidate',
+      status: result.status || access?.status || 'Candidate',
       recencyWindow,
-      notes: `${result.notes ? `${result.notes} ` : ''}${tier.notes} Recency: ${recencyWindow}.`,
+      accessStatus: result.accessStatus || access?.status || 'Public metadata candidate',
+      recommendedAction: result.recommendedAction || access?.action || 'Review the source and attach the underlying PDF or public document when it is needed for a final work product.',
+      notes: `${result.notes ? `${result.notes} ` : ''}${tier.notes} Recency: ${recencyWindow}.${access ? ` ${access.label} often requires manual verification or PDF upload before extraction.` : ''}`,
     };
   });
 
@@ -841,6 +921,8 @@ function buildDocumentInventory(results: SonarSearchResult[]) {
       status: result.status || 'Candidate',
       recencyWindow: result.recencyWindow || 'Undated source',
       confidenceTier: sourceConfidence(result),
+      accessStatus: result.accessStatus || 'Public metadata candidate',
+      recommendedAction: result.recommendedAction || 'Review manually before final use.',
       notes: result.notes || '',
       url: result.url,
     }));
@@ -891,6 +973,199 @@ function buildCoverageDashboardObject(results: SonarSearchResult[]) {
   };
 }
 
+const SOURCE_COVERAGE_REQUIREMENTS = [
+  {
+    key: 'acfr',
+    area: 'ACFR / audited financials',
+    patterns: [/annual comprehensive financial report/i, /\bacfr\b/i, /audited financial/i, /financial statements/i],
+    uploadType: 'ACFR / audited financial statements',
+    requiredFor: ['credit-memo', 'investment-committee-memo', 'rating-committee-memo', 'time-series-analysis'],
+    why: 'Core financial trend, liquidity, pension/OPEB, debt note, and audit evidence.',
+  },
+  {
+    key: 'official_statement',
+    area: 'Official Statement / POS',
+    patterns: [/official statement/i, /preliminary official statement/i, /\bpos\b/i, /revenue bond/i],
+    uploadType: 'Official Statement / POS',
+    requiredFor: ['credit-memo', 'investment-committee-memo', 'rating-committee-memo', 'covenant-tracking'],
+    why: 'Security pledge, flow of funds, debt service schedule, rate covenant, additional bonds test, and risk factors.',
+  },
+  {
+    key: 'emma_disclosure',
+    area: 'EMMA continuing disclosure',
+    patterns: [/emma/i, /msrb/i, /continuing disclosure/i, /annual disclosure/i, /event notice/i],
+    uploadType: 'EMMA annual report / continuing disclosure',
+    requiredFor: ['credit-memo', 'risk-monitor', 'watchlist-monitor', 'covenant-tracking'],
+    why: 'Current annual filing, event notices, covenant compliance, and CUSIP-specific monitoring.',
+    criticalAccess: true,
+  },
+  {
+    key: 'ratings',
+    area: 'Rating report / rating action',
+    patterns: [/rating report/i, /rating action/i, /moody/i, /s&p/i, /standard & poor/i, /fitch/i, /kbra/i, /kroll/i],
+    uploadType: 'Rating report / rating action',
+    requiredFor: ['credit-memo', 'investment-committee-memo', 'rating-committee-memo', 'risk-monitor'],
+    why: 'Rating/outlook, agency rationale, surveillance signals, and comparable credit framing.',
+    criticalAccess: true,
+  },
+  {
+    key: 'budget_cip',
+    area: 'Budget / CIP',
+    patterns: [/budget/i, /capital improvement/i, /\bcip\b/i, /financial plan/i, /capital plan/i],
+    uploadType: 'Budget / CIP',
+    requiredFor: ['credit-memo', 'investment-committee-memo', 'time-series-analysis', 'risk-monitor'],
+    why: 'Forward-looking revenue, expense, capital program, and funding-source assumptions.',
+  },
+  {
+    key: 'board_materials',
+    area: 'Board packet / agenda / minutes',
+    patterns: [/board/i, /agenda/i, /minutes/i, /packet/i, /resolution/i, /ordinance/i, /rfp/i, /municipal advisor/i, /bond counsel/i],
+    uploadType: 'Board agenda / packet / minutes',
+    requiredFor: ['risk-monitor', 'watchlist-monitor', 'due-diligence-report'],
+    why: 'Early signal for bond authorizations, RFPs, financing team changes, budgets, and rate actions.',
+  },
+  {
+    key: 'rate_covenant',
+    area: 'Rate study / covenant support',
+    patterns: [/rate study/i, /rate ordinance/i, /rate covenant/i, /additional bonds test/i, /debt service coverage/i, /\bdsc\b/i],
+    uploadType: 'Rate study / rate ordinance',
+    requiredFor: ['credit-memo', 'covenant-tracking', 'rating-committee-memo'],
+    why: 'Revenue sufficiency, affordability, covenant support, and legal security verification.',
+  },
+  {
+    key: 'single_audit',
+    area: 'Single Audit / federal awards',
+    patterns: [/single audit/i, /schedule of expenditures of federal awards/i, /\bsefa\b/i, /usaspending/i, /federal award/i, /federal grant/i],
+    uploadType: 'Single Audit / SEFA',
+    requiredFor: ['due-diligence-report', 'risk-monitor'],
+    why: 'Federal award exposure, grant compliance, findings, and questioned costs.',
+  },
+  {
+    key: 'sector_market',
+    area: 'Sector / market context',
+    patterns: [/sector outlook/i, /municipal market/i, /mmd/i, /spread/i, /comparable/i, /recent trade/i, /bondbuyer/i, /bloomberg/i, /reuters/i],
+    uploadType: 'Other public finance source',
+    requiredFor: ['investment-committee-memo', 'peer-comparison-table'],
+    why: 'Comparable issuers, spread/yield context, sector pressure, and relative-value framing.',
+  },
+];
+
+function bestCoverageMatch(results: SonarSearchResult[], patterns: RegExp[]) {
+  return results
+    .filter((result) => patterns.some((pattern) => pattern.test(sourceText(result))))
+    .sort((a, b) => {
+      const tierDelta = (a.sourceTierRank ?? 4) - (b.sourceTierRank ?? 4);
+      if (tierDelta !== 0) return tierDelta;
+      return String(b.date || b.last_updated || '').localeCompare(String(a.date || a.last_updated || ''));
+    })[0];
+}
+
+function coverageMatrixStatus(match: SonarSearchResult | undefined, criticalAccess = false) {
+  if (!match) return criticalAccess ? 'Needs Upload' : 'Needs Upload';
+  if (/Older context/i.test(match.recencyWindow || '')) return 'Stale';
+  if (/Manual Verification|Blocked/i.test(`${match.status ?? ''} ${match.accessStatus ?? ''}`)) return 'Manual Verification Required';
+  return 'Found';
+}
+
+function buildSourceCoverageMatrix(issuer: string, results: SonarSearchResult[], outputType: string) {
+  return SOURCE_COVERAGE_REQUIREMENTS.map((requirement) => {
+    const match = bestCoverageMatch(results, requirement.patterns);
+    const status = coverageMatrixStatus(match, requirement.criticalAccess);
+    const ready = status === 'Found' && (match?.sourceTierRank ?? 4) <= 2;
+
+    return {
+      key: requirement.key,
+      area: requirement.area,
+      status,
+      output_status: ready ? 'Good Enough for Output' : 'Needs Source',
+      required_for_selected_output: requirement.requiredFor.includes(outputType),
+      required_for: requirement.requiredFor,
+      upload_type: requirement.uploadType,
+      why: requirement.why,
+      matched_source: match ? {
+        title: match.title || (match.url ? sourceLabel(match.url) : 'Source candidate'),
+        url: match.url,
+        source_tier: match.sourceTier,
+        document_type: match.documentType,
+        date: publicationDate(match),
+        recency_window: match.recencyWindow,
+        status: match.status,
+        access_status: match.accessStatus,
+        recommended_action: match.recommendedAction,
+      } : null,
+      recommended_action: match?.recommendedAction ||
+        `Upload or link ${requirement.uploadType} in Important Files so LlamaParse can extract the evidence before final delivery.`,
+      retry_query: `${issuer} ${requirement.area} ${requirement.uploadType} PDF`,
+    };
+  });
+}
+
+const OUTPUT_ELIGIBILITY_RULES: Record<string, { label: string; required: string[]; helpful?: string[] }> = {
+  'research-brief': { label: 'Research Brief', required: [] },
+  'credit-memo': { label: 'Professional Credit Memo', required: ['acfr', 'official_statement'], helpful: ['ratings', 'emma_disclosure', 'rate_covenant', 'budget_cip'] },
+  'investment-committee-memo': { label: 'Investment Committee Memo', required: ['acfr', 'official_statement', 'sector_market'], helpful: ['ratings', 'budget_cip'] },
+  'rating-committee-memo': { label: 'Rating Committee Memo', required: ['acfr', 'official_statement', 'ratings'], helpful: ['rate_covenant', 'budget_cip'] },
+  'document-inventory-report': { label: 'Document Inventory Report', required: [] },
+  'due-diligence-report': { label: 'Due Diligence Report', required: ['acfr', 'official_statement'], helpful: ['board_materials', 'single_audit'] },
+  'risk-monitor': { label: 'Risk Monitor', required: ['board_materials'], helpful: ['ratings', 'emma_disclosure', 'budget_cip'] },
+  'watchlist-monitor': { label: 'Watchlist Monitor', required: ['board_materials'], helpful: ['ratings', 'emma_disclosure'] },
+  'peer-comparison-table': { label: 'Peer Comparison Table', required: ['sector_market'], helpful: ['ratings', 'acfr'] },
+  'time-series-analysis': { label: 'Time Series Analysis', required: ['acfr'], helpful: ['budget_cip'] },
+  'covenant-tracking': { label: 'Covenant Tracking', required: ['official_statement', 'emma_disclosure', 'rate_covenant'], helpful: ['acfr'] },
+  'source-appendix': { label: 'Source Appendix', required: [] },
+  'custom-report': { label: 'Custom Report', required: [] },
+};
+
+function buildOutputEligibility(sourceCoverageMatrix: Array<Record<string, any>>, selectedOutputType: string) {
+  const byKey = new Map(sourceCoverageMatrix.map((row) => [row.key, row]));
+  const evaluate = (outputType: string, rule: { label: string; required: string[]; helpful?: string[] }) => {
+    const missing = rule.required.filter((key) => byKey.get(key)?.output_status !== 'Good Enough for Output');
+    const manual = rule.required.filter((key) => /Manual|Stale|Needs Upload/i.test(byKey.get(key)?.status ?? ''));
+    const helpfulMissing = (rule.helpful ?? []).filter((key) => byKey.get(key)?.output_status !== 'Good Enough for Output');
+    const status = missing.length === 0
+      ? (helpfulMissing.length === 0 ? 'Ready' : 'Preliminary')
+      : 'Needs Sources';
+
+    return {
+      output_type: outputType,
+      label: rule.label,
+      status,
+      required_sources: rule.required,
+      missing_required_sources: missing,
+      helpful_missing_sources: helpfulMissing,
+      manual_verification_sources: manual,
+      recommendation: status === 'Ready'
+        ? 'Good enough to generate as a source-supported output.'
+        : status === 'Preliminary'
+          ? 'Can generate, but label caveats and attach helpful missing documents before final delivery.'
+          : 'Do not treat as final. Upload or verify required documents first.',
+    };
+  };
+  const outputs = Object.entries(OUTPUT_ELIGIBILITY_RULES).map(([outputType, rule]) => evaluate(outputType, rule));
+  const selected = outputs.find((item) => item.output_type === selectedOutputType) || evaluate(selectedOutputType, { label: selectedOutputType, required: [] });
+
+  return {
+    selected,
+    outputs,
+  };
+}
+
+function buildUploadQueue(sourceCoverageMatrix: Array<Record<string, any>>) {
+  return sourceCoverageMatrix
+    .filter((row) => row.output_status !== 'Good Enough for Output')
+    .map((row) => ({
+      area: row.area,
+      upload_type: row.upload_type,
+      status: row.status,
+      why: row.why,
+      recommended_action: row.recommended_action,
+      retry_query: row.retry_query,
+      parser: 'LlamaParse',
+      preferred_tier: /Official Statement|ACFR|EMMA|Rating/i.test(row.upload_type) ? 'agentic_plus' : 'agentic',
+    }))
+    .slice(0, 10);
+}
+
 function buildRawEvidenceNotes(results: SonarSearchResult[]) {
   return results
     .filter((result) => result.snippet || result.title)
@@ -902,6 +1177,8 @@ function buildRawEvidenceNotes(results: SonarSearchResult[]) {
       source_tier: result.sourceTier || 'Unclassified',
       document_type: result.documentType || 'Other',
       confidence: sourceConfidence(result),
+      access_status: result.accessStatus || 'Public metadata candidate',
+      recommended_action: result.recommendedAction || 'Review manually before final use.',
     }));
 }
 
@@ -951,6 +1228,9 @@ function buildEvidencePackage({
   failureClassification?: FailureClassification | null;
 }) {
   const coverage = buildCoverageDashboardObject(searchResults);
+  const sourceCoverageMatrix = buildSourceCoverageMatrix(issuer, searchResults, outputType);
+  const outputEligibility = buildOutputEligibility(sourceCoverageMatrix, outputType);
+  const uploadQueue = buildUploadQueue(sourceCoverageMatrix);
 
   return {
     issuer,
@@ -959,9 +1239,10 @@ function buildEvidencePackage({
     search_timestamp: timestamp,
     recency_policy: {
       as_of_date: recencyScope.asOfDate,
-      preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
-      fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
-      rule: 'Prefer last 3 months; expand to last 6 months only when no credible 3-month evidence is found; label older material as background.',
+      quarterly_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+      annual_window: `${recencyScope.annualStartDate} to ${recencyScope.asOfDate}`,
+      structural_window: `${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}`,
+      rule: 'Prefer last 3 months for fresh developments, use the 1-year window for monitoring backfill, and use the 3-year window for structural context. Label every item by window.',
     },
     source_strategy: {
       structured_connectors: searchResults.some((result) => result.source === 'USAspending')
@@ -975,7 +1256,11 @@ function buildEvidencePackage({
         'usaspending.gov',
         'data.ca.gov',
       ],
-      note: 'EMMA/MSRB, DebtWatch, SCO ByTheNumbers, CDIAC, and CKAN sources are prioritized through domain-targeted search unless a structured API connector is configured.',
+      critical_manual_sources: CRITICAL_SOURCE_ACCESS_NOTES.map((item) => ({
+        source: item.label,
+        action: item.action,
+      })),
+      note: 'EMMA/MSRB, rating pages, DebtWatch, SCO ByTheNumbers, CDIAC, and CKAN sources are prioritized through domain-targeted search. When crawler access is limited, the workflow marks the source for manual verification or PDF upload instead of pretending extraction is complete.',
     },
     issuer_profile_context: issuerProfile ?? null,
     universal_search: universalSearch ?? null,
@@ -998,12 +1283,22 @@ function buildEvidencePackage({
       filing_entity: item.filingEntity,
       status: item.status.toLowerCase(),
       confidence: item.confidenceTier,
+      access_status: item.accessStatus,
+      recommended_action: item.recommendedAction,
       recency_window: item.recencyWindow,
       notes: item.notes,
     })),
     coverage_dashboard: coverage,
+    source_coverage_matrix: sourceCoverageMatrix,
+    output_eligibility: outputEligibility,
+    upload_queue: uploadQueue,
     raw_evidence_notes: buildRawEvidenceNotes(searchResults),
-    missing_items: buildMissingItems(coverage),
+    missing_items: uniqueQueries([
+      ...buildMissingItems(coverage),
+      ...sourceCoverageMatrix
+        .filter((row) => row.output_status !== 'Good Enough for Output')
+        .map((row) => `${row.area}: ${row.status}. ${row.recommended_action}`),
+    ], 24),
   };
 }
 
@@ -1043,7 +1338,7 @@ async function structuredConnectorResults(issuer: string, source: string, recenc
     try {
       const awards = await searchUsaSpending({
         query: issuer,
-        startDate: recencyScope.fallbackStartDate,
+        startDate: recencyScope.structuralStartDate,
         endDate: recencyScope.asOfDate,
         limit: 6,
       });
@@ -1083,7 +1378,7 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     return [
       aiExperienceRules,
       'Format the answer as a short research memo with: Current answer, Evidence, Gaps, Next step.',
-      `Use the preferred 3-month window (${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}) first, then the 6-month fallback (${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}) only if needed.`,
+      `Use the quarterly window (${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}) for fresh developments, the annual window (${recencyScope.annualStartDate} to ${recencyScope.asOfDate}) for monitoring backfill, and the three-year window (${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}) for structural context.`,
       noRecentInfoGuide(),
     ].join('\n');
   }
@@ -1094,14 +1389,15 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     aiExperienceRules,
     'Use this exact finance-focused structure:',
     '1. Recency Discipline',
-    `- Preferred window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}.`,
-    `- Fallback window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
-    '- Label each development as Preferred 3-month evidence, 6-month fallback evidence, Older context only, or Undated source.',
+    `- Quarterly window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}.`,
+    `- Annual window: ${recencyScope.annualStartDate} to ${recencyScope.asOfDate}.`,
+    `- Three-year structural window: ${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}.`,
+    '- Label each development as Preferred 3-month evidence, Annual 1-year evidence, Structural 3-year context, Older context only, or Undated source.',
     '- If no current item is found, classify the reason using: No recent change found, Stale source only, Insufficient public evidence, or Needs manual verification.',
     '',
     '2. Research Mode',
     `- Selected mode: ${modeLabel}`,
-    '- Search provider: Perplexity Sonar + Perplexity Search API + official connector/domain search where available',
+    '- Search provider: Perplexity Sonar + Perplexity Search API + official connector/domain search + sector/market expansion where available',
     '- Timestamp:',
     '- Search scope:',
     '',
@@ -1150,6 +1446,7 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     '',
     '8. Working Conclusion',
     'Only provide conclusions supported by Tier 1 or Tier 2 sources.',
+    'If a critical source is marked Manual Verification Required, treat it as metadata only until the PDF or public document is uploaded or verified.',
     '',
     '9. Key Credit Considerations',
     '- Strengths:',
@@ -1164,6 +1461,9 @@ function modeAnswerInstructions(promptMode: PromptMode, financeFocused: boolean,
     '',
     '11. Next Search Queries',
     'List exact follow-up queries to improve evidence coverage.',
+    '',
+    '12. Upload / LlamaParse Queue',
+    'List documents that should be uploaded through Important Files so LlamaParse can extract covenant language, financial tables, CUSIP, dates, and source sections.',
   ].join('\n');
 }
 
@@ -1194,7 +1494,7 @@ async function searchPerplexity(apiKey: string, query: string) {
     },
     body: JSON.stringify({
       query,
-      max_results: 8,
+      max_results: 12,
       search_context_size: 'medium',
     }),
   });
@@ -1252,6 +1552,105 @@ function apiErrorMessage(payload: any, status: number) {
   return `Perplexity API error: ${status}`;
 }
 
+function openAiResponseText(payload: any) {
+  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+
+  const parts = (payload?.output ?? [])
+    .flatMap((item: any) => item?.content ?? [])
+    .map((content: any) => content?.text)
+    .filter(Boolean);
+
+  return parts.join('\n\n').trim();
+}
+
+async function buildOpenAiSourceIntelligence({
+  query,
+  outputType,
+  evidencePackage,
+  searchResults,
+}: {
+  query: string;
+  outputType: string;
+  evidencePackage: Record<string, any>;
+  searchResults: SonarSearchResult[];
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      status: 'not_configured',
+      note: 'OPENAI_API_KEY is not configured, so Civic Ledger used Perplexity-only source intelligence for this run.',
+    };
+  }
+
+  const model = process.env.OPENAI_MODEL || 'gpt-5.5';
+  const sourceBrief = {
+    query,
+    outputType,
+    recency_policy: evidencePackage.recency_policy,
+    source_coverage_matrix: evidencePackage.source_coverage_matrix,
+    output_eligibility: evidencePackage.output_eligibility?.selected,
+    upload_queue: evidencePackage.upload_queue,
+    top_sources: searchResults.slice(0, 24).map((source) => ({
+      title: source.title,
+      url: source.url,
+      source_tier: source.sourceTier,
+      document_type: source.documentType,
+      recency_window: source.recencyWindow,
+      status: source.status,
+      access_status: source.accessStatus,
+      recommended_action: source.recommendedAction,
+      snippet: source.snippet,
+    })),
+  };
+
+  const res = await fetch(OPENAI_RESPONSES_URL, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: 'system',
+          content: [
+            'You are Civic Ledger Source Intelligence QA.',
+            'Review the supplied public finance source package after Perplexity search.',
+            'Do not invent source facts. Focus on coverage gaps, output eligibility, upload priorities, and sector/market context still needed.',
+            'Return concise bullets with these headings: Output Decision, Source Gaps, Upload Queue, Sector / Market Backfill, Final QA.',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(sourceBrief, null, 2),
+        },
+      ],
+      max_output_tokens: 1100,
+      temperature: 0.1,
+    }),
+  });
+
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      status: 'error',
+      note: apiErrorMessage(payload, res.status),
+    };
+  }
+
+  return {
+    status: 'completed',
+    model: payload.model || model,
+    content: openAiResponseText(payload),
+    generated_at: new Date().toISOString(),
+    usage: payload.usage ?? null,
+  };
+}
+
 export async function POST(request: Request) {
   const apiKey = getPerplexityApiKey();
 
@@ -1298,7 +1697,9 @@ export async function POST(request: Request) {
   const searchQueries = uniqueQueries([
     ...universalSearch.expandedQueries.map((searchQuery) => withRecency(searchQuery, recencyScope)),
     ...buildSearchQueries(researchSubject, promptMode, customAngle, recencyScope, sourceForSearch),
-  ]);
+    ...buildCriticalSourceManualQueries(researchSubject, recencyScope),
+    ...buildSectorMarketQueries(researchSubject, promptMode, customAngle, recencyScope, universalSearch),
+  ], 42);
   const structuredResults = workflowOptions.includeLiveSearch
     ? await structuredConnectorResults(researchSubject, sourceForSearch, recencyScope)
     : [];
@@ -1339,7 +1740,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const allSearchQueries = uniqueQueries([...searchQueries, ...baselineQueries], 24);
+  const allSearchQueries = uniqueQueries([...searchQueries, ...baselineQueries], 64);
   const coreFinanceDocumentsFound = hasCoreFinanceDocuments(classifiedSearchApiResults);
   const preliminaryDocumentDiagnostics = buildDocumentDiagnostics(researchSubject, classifiedSearchApiResults);
   const preliminaryRetrievalDiagnostics = buildRetrievalDiagnostics({
@@ -1384,11 +1785,13 @@ export async function POST(request: Request) {
     `Preferred source filter: ${source}`,
     `Universal source route: ${sourceForSearch}`,
     `Timestamp: ${timestamp}`,
-    `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
-    `Fallback recency window: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
+    `Quarterly recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+    `Annual monitoring window: ${recencyScope.annualStartDate} to ${recencyScope.asOfDate}`,
+    `Three-year structural context window: ${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}`,
     `Search scope: ${allSearchQueries.join(' | ')}`,
     baselineQueries.length > 0 ? `Baseline source fallback triggered: ${baselineQueries.join(' | ')}` : null,
     `Structured connector scope: ${structuredResults.length > 0 ? 'USAspending API plus preferred official domain search' : 'Preferred official domain search'}`,
+    'Critical source handling: If EMMA/MSRB or rating-agency pages are surfaced but full document extraction is not available, label them Manual Verification Required and recommend PDF upload through Important Files / LlamaParse.',
     officialSeedResults.length > 0 ? `Known official source registry: ${officialSeedResults.map((result) => result.title).join(' | ')}` : null,
     `Core finance document found by Search API: ${coreFinanceDocumentsFound ? 'yes' : 'no'}`,
     issuerProfileContext ? '' : null,
@@ -1473,7 +1876,7 @@ export async function POST(request: Request) {
     `Output type requested: ${outputType}`,
     universalSearch.summary,
     `Universal search facets: ${universalSearch.facets.map((facet) => `${facet.label}: ${facet.value}`).join('; ') || 'none'}`,
-    `Preferred recency window: ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}; fallback: ${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}.`,
+    `Recency windows: quarterly ${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}; annual ${recencyScope.annualStartDate} to ${recencyScope.asOfDate}; structural ${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}.`,
     baselineQueries.length > 0
       ? `Baseline source fallback ran because initial source coverage was limited; older documents are structural context, not recent developments.`
       : 'Baseline source fallback did not run.',
@@ -1500,6 +1903,17 @@ export async function POST(request: Request) {
     retrievalDiagnostics,
     failureClassification,
   });
+  const openAiSourceIntelligence = workflowOptions.includeOpenaiSynthesis
+    ? await buildOpenAiSourceIntelligence({
+      query,
+      outputType,
+      evidencePackage,
+      searchResults,
+    })
+    : {
+      status: 'skipped',
+      note: 'OpenAI synthesis was disabled for this workflow run.',
+    };
   const evidenceEngine = buildEvidenceEngine({
     title: researchSubject,
     facts,
@@ -1550,6 +1964,7 @@ export async function POST(request: Request) {
   });
   const enrichedEvidencePackage = {
     ...evidencePackage,
+    openai_source_intelligence: openAiSourceIntelligence,
     evidence_engine: evidenceEngine,
     research_workspace: researchWorkspace,
     issuer_dashboard: issuerDashboard,
@@ -1584,8 +1999,9 @@ export async function POST(request: Request) {
         include_missing_data: workflowOptions.includeMissingData,
         include_export: workflowOptions.includeExport,
         recency_policy: {
-          preferred_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
-          fallback_window: `${recencyScope.fallbackStartDate} to ${recencyScope.asOfDate}`,
+          quarterly_window: `${recencyScope.preferredStartDate} to ${recencyScope.asOfDate}`,
+          annual_window: `${recencyScope.annualStartDate} to ${recencyScope.asOfDate}`,
+          structural_window: `${recencyScope.structuralStartDate} to ${recencyScope.asOfDate}`,
           baseline_source_fallback: baselineQueries.length > 0
             ? 'Triggered because initial live search coverage was limited. Older sources are structural context, not recent developments.'
             : 'Not triggered.',

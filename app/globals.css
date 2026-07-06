@@ -2471,6 +2471,16 @@ h3 {
   min-width: 940px;
 }
 
+.source-coverage-matrix {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.source-coverage-matrix .mini-table-row {
+  grid-template-columns: minmax(180px, 1fr) 160px 160px minmax(220px, 1.1fr) minmax(280px, 1.4fr);
+  min-width: 1040px;
+}
+
 .mini-table-row:first-child,
 .document-row:first-child {
   border-top: 0;

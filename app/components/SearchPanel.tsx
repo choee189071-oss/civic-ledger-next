@@ -499,7 +499,7 @@ export function SearchPanel(props: Props) {
         </div>
       </div>
       <p className="muted small">
-        Recency policy: prefer developments from the last 3 months; expand to 6 months only when no fresh issuer-specific evidence is found.
+        Recency policy: separate quarterly updates, one-year monitoring backfill, and three-year structural context.
       </p>
 
       <div className="quick-start-grid" aria-label="Research quick starts">

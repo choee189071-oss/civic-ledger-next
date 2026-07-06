@@ -17,6 +17,8 @@ type CcdUpdate = {
     asOfDate: string;
     preferredStartDate: string;
     fallbackStartDate: string;
+    annualStartDate: string;
+    structuralStartDate: string;
   };
 };
 
@@ -233,7 +235,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
     if (!res.ok) {
       return {
         issuer,
-        update: `### ${issuer}\nStatus: Needs manual verification\nRecency: Undated source\nReason: The automated scan failed, so the platform could not verify whether there was a 3-month or 6-month issuer-specific development.\nUpdate: Re-run this issuer individually or verify manually against board packets, EMMA/MSRB, rating pages, and official issuer materials.\nSource: ${payload.error || 'Scanner error'}`,
+        update: `### ${issuer}\nStatus: Needs manual verification\nRecency: Undated source\nReason: The automated scan failed, so the platform could not verify whether there was a quarterly or annual issuer-specific development.\nUpdate: Re-run this issuer individually or verify manually against board packets, EMMA/MSRB, rating pages, and official issuer materials.\nSource: ${payload.error || 'Scanner error'}`,
         error: payload.error || 'Scan failed.',
       };
     }
@@ -344,8 +346,8 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
       '',
       '| Metric | Result |',
       '|---|---|',
-      `| Preferred recency window | ${scope ? `${scope.preferredStartDate} to ${scope.asOfDate}` : 'Last 3 months'} |`,
-      `| Fallback recency window | ${scope ? `${scope.fallbackStartDate} to ${scope.asOfDate}` : 'Last 6 months'} |`,
+      `| Quarterly recency window | ${scope ? `${scope.preferredStartDate} to ${scope.asOfDate}` : 'Last 3 months'} |`,
+      `| Annual monitoring window | ${scope ? `${scope.annualStartDate} to ${scope.asOfDate}` : 'Last 1 year'} |`,
       `| Selected issuers | ${issuersToScan.length} |`,
       `| Scanned issuers | ${ccdUpdates.length} |`,
       `| Material developments surfaced | ${foundCount} |`,
@@ -492,7 +494,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
               <p className="eyebrow">Batch Monitor</p>
               <h3>General CCD Update</h3>
               <p className="muted small">
-                Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately with a 3-month preferred window and 6-month fallback.
+                Run a sector-wide queue across selected California CCD issuers. Each issuer is checked separately with quarterly updates, annual backfill, and structural context.
               </p>
             </div>
             <div className="report-toolbar">
@@ -670,7 +672,7 @@ export function IssuerDevelopmentsPanel({ savedRecords, onRunIssuerScan }: Props
                 <div>
                   <p className="eyebrow">{sector.label}</p>
                   <h2>{selectedIssuer}</h2>
-                  <p className="muted">Recent development workspace for reports, news, disclosure filings, and credit watch items. Searches prefer the last 3 months and use a 6-month fallback if needed.</p>
+                  <p className="muted">Recent development workspace for reports, news, disclosure filings, and credit watch items. Searches separate quarterly updates, annual evidence, and structural context.</p>
                 </div>
                 <button
                   className="button-primary"

@@ -25,7 +25,7 @@ const workflowCards = [
     promptMode: 'watchlist-monitoring',
     outputType: 'watchlist-monitor',
     source: 'all',
-    angle: 'Check for new EMMA filings, rating changes, board actions, bond authorizations, RFPs, federal awards, Single Audit findings, and other recent monitoring signals. Use preferred 3-month window and 6-month fallback.',
+    angle: 'Check for new EMMA filings, rating changes, board actions, bond authorizations, RFPs, federal awards, Single Audit findings, and other monitoring signals. Separate quarterly updates, one-year backfill, and three-year structural context.',
   },
   {
     id: 'peer',
